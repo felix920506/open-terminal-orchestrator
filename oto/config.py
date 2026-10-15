@@ -27,6 +27,17 @@ class Settings(BaseSettings):
     # Key for at-rest encryption of container API keys and policy env values.
     secret_key: str = ""
 
+    # Source-address allowlists (comma-separated IPs, CIDRs or hostnames; empty = allow any).
+    #  allowed_clients        – every route except /healthz; normally just the Open WebUI backend.
+    #  admin_allowed_clients  – if set, replaces allowed_clients for sandbox admin routes
+    #                           (/api/v1/terminals/* except refresh, /metrics). Include Open WebUI
+    #                           here too if you use the integrations/owui functions.
+    #  trusted_proxies        – peers whose X-Forwarded-For is honoured (reverse proxies only).
+    allowed_clients: str = ""
+    admin_allowed_clients: str = ""
+    trusted_proxies: str = ""
+    client_dns_refresh_seconds: float = 30.0
+
     database_url: str = "sqlite+aiosqlite:///./data/oto.db"
     docker_host: str | None = None  # None → DOCKER_HOST env / local socket
 

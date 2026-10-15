@@ -32,6 +32,13 @@ docker image inspect "$SANDBOX_IMAGE" >/dev/null 2>&1 || docker pull "$SANDBOX_I
 docker build -q -t open-terminal-orchestrator:dev .. >/dev/null
 docker compose -p ototest up -d --no-build
 
+# Lock the orchestrator down to Open WebUI. The admin routes also admit this host (requests
+# through the published port arrive from the network gateway) so the e2e script can inspect
+# sandboxes.
+GATEWAY=$(docker network inspect "$OTO_WEBUI_NETWORK" --format '{{(index .IPAM.Config 0).Gateway}}')
+export ORCH_ALLOWED_CLIENTS=owui-e2e ORCH_ADMIN_ALLOWED_CLIENTS="owui-e2e,$GATEWAY"
+docker compose -p ototest up -d --no-build
+
 if ! docker container inspect owui-e2e >/dev/null 2>&1; then
   docker run -d --name owui-e2e --network oto-e2e -p 127.0.0.1:13000:8080 \
     -e OPENAI_API_BASE_URL=https://openrouter.ai/api/v1 -e OPENAI_API_KEY="$OPENROUTER_API_KEY" \

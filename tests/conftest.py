@@ -53,9 +53,9 @@ def runtime() -> FakeRuntime:
 def make_client(settings, runtime):
     clients = []
 
-    def _make(**overrides) -> TestClient:
+    def _make(client_addr: tuple[str, int] = ("testclient", 50000), **overrides) -> TestClient:
         s = settings.model_copy(update=overrides)
-        client = TestClient(create_app(s, runtime=runtime, transport=runtime.transport()))
+        client = TestClient(create_app(s, runtime=runtime, transport=runtime.transport()), client=client_addr)
         client.__enter__()
         clients.append(client)
         return client

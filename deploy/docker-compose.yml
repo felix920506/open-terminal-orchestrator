@@ -46,6 +46,11 @@ services:
       ORCH_IMAGE_ALLOWLIST: ${ORCH_IMAGE_ALLOWLIST:-ghcr.io/open-webui/open-terminal*}
       ORCH_PULL_POLICY: ${ORCH_PULL_POLICY:-if-not-present}
       ORCH_MAX_RUNNING_GLOBAL: ${ORCH_MAX_RUNNING_GLOBAL:-50}
+      # Only these sources may call the orchestrator (IPs, CIDRs or hostnames such as the
+      # Open WebUI container name). Empty allows any host that can reach the port.
+      ORCH_ALLOWED_CLIENTS: ${ORCH_ALLOWED_CLIENTS:-}  # e.g. open-webui
+      ORCH_ADMIN_ALLOWED_CLIENTS: ${ORCH_ADMIN_ALLOWED_CLIENTS:-}
+      ORCH_TRUSTED_PROXIES: ${ORCH_TRUSTED_PROXIES:-}
     volumes:
       - oto-data:/data
     ports:

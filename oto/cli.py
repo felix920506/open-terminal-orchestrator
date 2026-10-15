@@ -73,7 +73,13 @@ def main(argv: list[str] | None = None) -> None:
         settings = get_settings()
         logging.basicConfig(level=settings.log_level.upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
         uvicorn.run(
-            create_app(settings), host=settings.listen_host, port=settings.listen_port, log_level=settings.log_level
+            create_app(settings),
+            host=settings.listen_host,
+            port=settings.listen_port,
+            log_level=settings.log_level,
+            # The client allowlist must see the real peer address; X-Forwarded-For is only
+            # honoured for ORCH_TRUSTED_PROXIES, inside the orchestrator.
+            proxy_headers=False,
         )
         return
 

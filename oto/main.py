@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from contextlib import asynccontextmanager
@@ -13,6 +14,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from . import __version__
 from .api import admin, gateway
 from .auth import require_connection_key
+from .client_filter import ClientAllowlist, ClientFilterMiddleware
 from .config import Settings, get_settings
 from .manager import CapacityError, SandboxError
 from .policy_store import PolicyError
@@ -29,9 +31,25 @@ def create_app(
 ) -> FastAPI:
     """Build the app. ``runtime`` and ``transport`` are injection points for tests."""
     settings = settings or get_settings()
+    clients = ClientAllowlist.from_setting(settings.allowed_clients, "clients")
+    admin_clients = ClientAllowlist.from_setting(settings.admin_allowed_clients, "admin clients")
+    trusted_proxies = ClientAllowlist.from_setting(settings.trusted_proxies, "trusted proxies")
+    allowlists = [a for a in (clients, admin_clients, trusted_proxies) if a]
+
+    async def refresh_allowlists() -> None:
+        while True:
+            await asyncio.sleep(settings.client_dns_refresh_seconds)
+            for allowlist in allowlists:
+                await allowlist.refresh()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        for allowlist in allowlists:
+            await allowlist.refresh()
+            log.info("Allowlist (%s): %s", allowlist.name, ", ".join(allowlist.describe()))
+        if not clients:
+            log.warning("ORCH_ALLOWED_CLIENTS is not set; any host that can reach this port may call it")
+        dns_task = asyncio.create_task(refresh_allowlists()) if any(a.hostnames for a in allowlists) else None
         if not settings.api_key:
             settings.api_key = secrets.token_urlsafe(32)
             log.warning("ORCH_API_KEY is not set; generated a temporary key for this run: %s", settings.api_key)
@@ -58,6 +76,8 @@ def create_app(
         try:
             yield
         finally:
+            if dns_task:
+                dns_task.cancel()
             await svc.close()
 
     app = FastAPI(
@@ -99,6 +119,10 @@ def create_app(
         ]
         return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
 
+    app.state.allowlists = {"clients": clients, "admin_clients": admin_clients}
+    app.add_middleware(
+        ClientFilterMiddleware, clients=clients, admin_clients=admin_clients, trusted_proxies=trusted_proxies
+    )
     app.include_router(admin.router)
     app.include_router(gateway.router)
     app.include_router(gateway.root_router)  # catch-all; must be last

@@ -108,7 +108,7 @@ def _spawn_warmup(svc: Services, policy_id: str) -> None:
 
 
 @router.get("/status")
-async def status(svc: Services = Depends(connection_auth)):
+async def status(request: Request, svc: Services = Depends(connection_auth)):
     counts = await svc.manager.counts()
     by_state: dict[str, int] = {}
     for (_, state), n in counts.items():
@@ -119,6 +119,10 @@ async def status(svc: Services = Depends(connection_auth)):
         "sandbox_access": svc.settings.sandbox_access,
         "sandboxes": by_state,
         "max_running_global": svc.settings.max_running_global,
+        "client_allowlist": {
+            name: (allowlist.describe() if allowlist else None)
+            for name, allowlist in (getattr(request.app.state, "allowlists", None) or {}).items()
+        },
         "policies": [
             {"id": p.id, "status": p.status, "detail": p.status_detail, "image_ref": p.image_ref}
             for p in await svc.policies.list()
