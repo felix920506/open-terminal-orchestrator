@@ -1,0 +1,11 @@
+# Airgapped overlay: docker compose -f docker-compose.yml -f docker-compose.airgapped.yml up -d
+# Load images first: docker load -i orchestrator.tar && docker load -i open-terminal.tar
+services:
+  socket-proxy:
+    pull_policy: never
+  orchestrator:
+    pull_policy: never
+    build: !reset null
+    environment:
+      ORCH_AIRGAPPED: "true"
+      ORCH_PULL_POLICY: never
