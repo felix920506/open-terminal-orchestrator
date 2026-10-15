@@ -498,3 +498,48 @@ for a later Kubernetes driver (Pod + PVC per sandbox).
    commercial "Terminals" product. Before any public release, confirm that this is
    acceptable.
 
+---
+
+## 16. Implementation status (v0.1)
+
+Implemented in `oto/` and covered by `tests/`:
+
+| Design section | Module |
+|---|---|
+| §2 contract: policies, lifecycle, refresh, status, `/p/{policy}` routing, WS | `api/admin.py`, `api/gateway.py` |
+| §4 data model | `db.py` (SQLite/Postgres via SQLAlchemy; `create_all`, no migrations yet) |
+| §5.2 proxy: single-flight start, owner binding, header rewrite, streaming, retry once on a dead upstream | `api/gateway.py`, `manager.py` |
+| §5.3 spec cache via a probe container | `spec_cache.py` |
+| §6 allowlist, digest pinning, pull policy | `policy_store.py`, `runtime/docker.py` |
+| §7 state machine, idle stop (plus background-process grace and WS/in-flight pins), LRU capacity, GC, retention, reset (AI/user/admin/chat-deleted) | `manager.py`, `reaper.py`, `integrations/owui/` |
+| §8 per-sandbox internal network, ICC-off egress network, per-sandbox keys, encrypted secrets | `manager.py`, `crypto.py` |
+| §9 airgapped switches and compose overlay | `config.py`, `deploy/` |
+| §10 startup reconcile (adopt, quarantine orphans, remove stray probes), crash detection | `manager.reconcile`, `reaper.py` |
+| §11 audit log, `/metrics`, CLI | `db.py`, `main.py`, `cli.py` |
+
+Where v0.1 differs from the design:
+
+- **Admin endpoints for integrations** are under `/api/v1/terminals/*` rather than
+  `/api/v1/sandboxes`. Open WebUI's user-facing proxy refuses that prefix, so a user can never
+  reach them through Open WebUI, even with a connection that has no policy ID.
+- **`published` access mode** was added for development (orchestrator on the host). Sandbox
+  networks are not `internal` in that mode.
+- **Ephemeral policies** (no `storage`) follow Open WebUI's form semantics. They have no
+  volume and are destroyed, not dehydrated, at container GC time.
+- **Crash detection** inspects running containers on each reaper tick instead of
+  subscribing to the Docker event stream.
+- **Security defaults** keep the stock Open Terminal images working: `no-new-privileges`
+  off, and a small `cap_drop` set. Tighten them per policy.
+- **The container working directory defaults to `home_path`.** Live testing showed the slim
+  image runs from `/app`, which Open Terminal then reports as cwd and home. Relative paths and
+  the file browser therefore landed outside the persisted volume.
+- **Contract tests:** `scripts/e2e_openwebui.py` drives a real Open WebUI (v0.12.2 verified)
+  over HTTP and WebSocket. It is not wired into CI yet, because it needs an LLM provider key.
+- **Source-address allowlist (added after v0.1):** `ORCH_ALLOWED_CLIENTS` and
+  `ORCH_ADMIN_ALLOWED_CLIENTS` (IPs, CIDRs or hostnames) and `ORCH_TRUSTED_PROXIES`, enforced
+  by ASGI middleware for HTTP and WebSocket (`client_filter.py`). With it set, sandboxes can no
+  longer reach the orchestrator API at all. The live test runs with the stack restricted to
+  the Open WebUI container: 32/32 checks pass, and the host, other containers and a sandbox get
+  403.
+- **Not built yet:** Postgres advisory locks (HA), Alembic migrations, volume quotas, and the
+  release `make bundle`.
