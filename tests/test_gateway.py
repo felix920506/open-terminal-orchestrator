@@ -72,6 +72,7 @@ def test_conversations_are_isolated_and_headers_rewritten(client, runtime):
     assert a.spec.volume != b.spec.volume
     assert a.spec.env["OPEN_TERMINAL_API_KEY"] != b.spec.env["OPEN_TERMINAL_API_KEY"]
     assert runtime.networks[a.spec.network]["internal"] is True
+    assert a.spec.working_dir == "/home/user"
 
     r = client.post("/p/dev/echo?x=1&x=2", content=b"payload", headers=chat_headers("A"))
     assert r.status_code == 200

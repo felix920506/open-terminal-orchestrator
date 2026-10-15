@@ -31,6 +31,7 @@ class ContainerSpec:
     extra_networks: list[str] = field(default_factory=list)
     volume: str | None = None
     mount_path: str = "/home/user"
+    working_dir: str | None = None
     publish_host: str | None = None  # publish container port 8000 on this host IP (random port)
     nano_cpus: int | None = None
     memory_bytes: int | None = None

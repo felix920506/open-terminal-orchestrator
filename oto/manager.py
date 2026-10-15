@@ -408,6 +408,7 @@ class SandboxManager:
             extra_networks=extra_networks,
             volume=row.volume_name,
             mount_path=lc.home_path,
+            working_dir=lc.home_path if lc.working_dir is None else (lc.working_dir or None),
             publish_host=self.settings.publish_host if published else None,
             nano_cpus=policy.nano_cpus,
             memory_bytes=policy.memory_bytes,

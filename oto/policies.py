@@ -57,6 +57,10 @@ class Lifecycle(BaseModel):
     egress: Literal["none", "allowlist", "open"] = "open"
     allowed_domains: list[str] = Field(default_factory=list)
     home_path: str = "/home/user"
+    # Container working directory. Open Terminal reports it as cwd and home, so it decides where
+    # relative paths land and where the file browser opens. None → home_path (on the volume);
+    # "" → the image's default (/app for the slim image, which is not persisted).
+    working_dir: str | None = None
     security: Security = Field(default_factory=Security)
 
 

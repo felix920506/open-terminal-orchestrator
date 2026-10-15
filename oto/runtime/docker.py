@@ -160,6 +160,7 @@ class DockerRuntime:
             "Image": spec.image,
             "Env": [f"{k}={v}" for k, v in spec.env.items()],
             "Labels": spec.labels,
+            **({"WorkingDir": spec.working_dir} if spec.working_dir else {}),
             "ExposedPorts": {SANDBOX_PORT: {}},
             "HostConfig": host_config,
             "NetworkingConfig": {
