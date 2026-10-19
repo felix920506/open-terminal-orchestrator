@@ -1,0 +1,138 @@
+name: Scientific Open Terminal image
+
+# Rebuilt weekly so upstream Open Terminal releases and security fixes in the base image are
+# picked up without a commit here.
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+    paths: ["images/scientific/**", ".github/workflows/scientific-image.yml"]
+  pull_request:
+    paths: ["images/scientific/**", ".github/workflows/scientific-image.yml"]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      base_image:
+        description: Base image to build from
+        default: ghcr.io/open-webui/open-terminal:latest
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/open-terminal-scientific
+  BASE_IMAGE: ${{ inputs.base_image || 'ghcr.io/open-webui/open-terminal:latest' }}
+
+jobs:
+  # The image is ~7 GB per architecture, so each one is built natively on its own runner
+  # (no QEMU) and the per-arch digests are merged into one manifest afterwards.
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/local/.ghcup
+          docker system prune -af
+          df -h /
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: images/scientific
+          platforms: ${{ matrix.platform }}
+          build-args: BASE_IMAGE=${{ env.BASE_IMAGE }}
+          load: true
+          tags: open-terminal-scientific:ci
+      - name: Smoke test
+        run: |
+          docker run --rm --entrypoint python3 open-terminal-scientific:ci -c "
+          import numpy, scipy, pandas, sklearn, statsmodels, sympy, polars, xarray, h5py, formulas
+          import pandas as pd
+          df = pd.DataFrame({'a': [1, 2, 3]})
+          for path, engine in [('/tmp/t.xlsx', 'xlsxwriter'), ('/tmp/t.ods', 'odf')]:
+              df.to_excel(path, index=False, engine=engine)
+              assert pd.read_excel(path).equals(df), path
+          assert pd.read_excel('/tmp/t.xlsx', engine='calamine').equals(df)
+          assert polars.read_excel('/tmp/t.xlsx').shape == (3, 1)
+          print('ok')
+          "
+      - id: push
+        name: Push by digest
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: images/scientific
+          platforms: ${{ matrix.platform }}
+          build-args: BASE_IMAGE=${{ env.BASE_IMAGE }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+      - name: Export digest
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.push.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+          echo "PLATFORM_PAIR=${{ matrix.platform }}" | tr / - >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  publish:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=schedule,pattern={{date 'YYYYMMDD'}}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+      - name: Create manifest list
+        working-directory: /tmp/digests
+        run: |
+          # shellcheck disable=SC2046  # splitting into -t/digest arguments is intended
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+      - run: docker buildx imagetools inspect ${{ env.IMAGE }}:${{ steps.meta.outputs.version }}

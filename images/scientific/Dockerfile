@@ -1,6 +1,8 @@
 # Open Terminal sandbox with the Python scientific stack and spreadsheet tooling.
 #
-#   docker build -t oto/open-terminal-scientific:latest images/scientific
+#   docker build -t ghcr.io/felix920506/open-terminal-scientific:latest images/scientific
+#
+# Published by .github/workflows/scientific-image.yml.
 #
 # Builds on the full upstream image (numpy, scipy, pandas, matplotlib, seaborn, plotly,
 # scikit-learn, jupyter, openpyxl, xlrd, xlsxwriter, LibreOffice) and adds what it lacks.

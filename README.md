@@ -65,7 +65,14 @@ uv run oto --key devkey ls
 cd deploy
 export ORCH_API_KEY=$(openssl rand -hex 32) ORCH_ADMIN_API_KEY=$(openssl rand -hex 32) ORCH_SECRET_KEY=$(openssl rand -hex 32)
 docker compose up -d --build
+# or use the published image instead of building:
+OTO_IMAGE=ghcr.io/felix920506/open-terminal-orchestrator:latest docker compose up -d --no-build
 ```
+
+Published images (GitHub Actions, multi-arch amd64/arm64):
+- `ghcr.io/felix920506/open-terminal-orchestrator`: `latest` from `master`, `sha-<commit>`,
+  and `X.Y.Z`/`X.Y` from `vX.Y.Z` tags. It is built only after lint and tests pass.
+- `ghcr.io/felix920506/open-terminal-scientific`: see [Sandbox images](#sandbox-images).
 
 - The orchestrator talks to Docker through `tecnativa/docker-socket-proxy`. It never gets
   the raw socket.
@@ -79,7 +86,7 @@ docker compose up -d --build
 
 ```bash
 # On a connected machine
-docker save open-terminal-orchestrator:latest tecnativa/docker-socket-proxy:v0.4.2 -o oto.tar
+docker save ghcr.io/felix920506/open-terminal-orchestrator:latest tecnativa/docker-socket-proxy:v0.4.2 -o oto.tar
 docker save ghcr.io/open-webui/open-terminal:latest -o open-terminal.tar
 # On the airgapped host
 docker load -i oto.tar && docker load -i open-terminal.tar
@@ -104,12 +111,16 @@ xlsxwriter and LibreOffice. `images/scientific` extends it with:
   fastexcel for polars, `formulas` to evaluate workbook formulas, and msoffcrypto-tool for
   password-protected files.
 
+It is published as `ghcr.io/felix920506/open-terminal-scientific`, rebuilt weekly so upstream
+Open Terminal releases are picked up. Tags are `latest`, `YYYYMMDD` (weekly builds) and
+`sha-<commit>`. To build it locally:
+
 ```bash
-docker build -t oto/open-terminal-scientific:latest images/scientific
+docker build -t ghcr.io/felix920506/open-terminal-scientific:latest images/scientific
 ```
 
 To use it, add the image to `ORCH_IMAGE_ALLOWLIST`, for example
-`ghcr.io/open-webui/open-terminal*,oto/open-terminal-*`. Then set it as a policy's image, or
+`ghcr.io/open-webui/open-terminal*,ghcr.io/felix920506/open-terminal-scientific*`. Then set it as a policy's image, or
 as `ORCH_DEFAULT_IMAGE`. For airgapped hosts, `docker save` it like the images above.
 
 ## Open WebUI setup
