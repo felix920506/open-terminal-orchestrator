@@ -93,6 +93,25 @@ cd deploy && docker compose -f docker-compose.yml -f docker-compose.airgapped.ym
 
 A policy whose image is not loaded shows up as `unavailable` in `oto status`.
 
+### Sandbox images
+
+The slim image ships almost no Python libraries. The full image (`:latest`, ~6 GB) includes
+numpy, scipy, pandas, matplotlib, seaborn, plotly, scikit-learn, Jupyter, openpyxl, xlrd,
+xlsxwriter and LibreOffice. `images/scientific` extends it with:
+- **Scientific:** sympy, statsmodels, networkx, scikit-image, numba, polars, pyarrow, xarray,
+  netCDF4, h5py, PyTables, bokeh and altair.
+- **Excel:** every pandas Excel engine (calamine, pyxlsb for `.xlsb`, odfpy for `.ods`),
+  fastexcel for polars, `formulas` to evaluate workbook formulas, and msoffcrypto-tool for
+  password-protected files.
+
+```bash
+docker build -t oto/open-terminal-scientific:latest images/scientific
+```
+
+To use it, add the image to `ORCH_IMAGE_ALLOWLIST`, for example
+`ghcr.io/open-webui/open-terminal*,oto/open-terminal-*`. Then set it as a policy's image, or
+as `ORCH_DEFAULT_IMAGE`. For airgapped hosts, `docker save` it like the images above.
+
 ## Open WebUI setup
 
 1. Go to **Admin Settings → Integrations → Open Terminal** and add a connection. Set the URL to
