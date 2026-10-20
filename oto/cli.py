@@ -48,6 +48,7 @@ def main(argv: list[str] | None = None) -> None:
     ls.add_argument("--user")
     ls.add_argument("--state")
     ls.add_argument("--json", action="store_true")
+    ls.add_argument("-q", "--quiet", action="store_true", help="print sandbox ids only")
 
     for name in ("show", "stop", "reset", "destroy"):
         p = sub.add_parser(name, help=f"{name} a sandbox")
@@ -93,6 +94,9 @@ def main(argv: list[str] | None = None) -> None:
             r = c.get("/api/v1/terminals/sandboxes", params=params)
             if args.json or r.is_error:
                 _print(r)
+            elif args.quiet:
+                for row in r.json():
+                    print(row["id"])
             else:
                 _table(
                     r.json(),
