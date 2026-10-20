@@ -533,7 +533,7 @@ Where v0.1 differs from the design:
 - **The container working directory defaults to `home_path`.** Live testing showed the slim
   image runs from `/app`, which Open Terminal then reports as cwd and home. Relative paths and
   the file browser therefore landed outside the persisted volume.
-- **Contract tests:** `scripts/e2e_openwebui.py` drives a real Open WebUI (v0.12.2 verified)
+- **Contract tests:** `scripts/e2e_openwebui.py` drives a real Open WebUI (v0.11.4 and v0.12.2 verified)
   over HTTP and WebSocket. It is not wired into CI yet, because it needs an LLM provider key.
 - **Source-address allowlist (added after v0.1):** `ORCH_ALLOWED_CLIENTS` and
   `ORCH_ADMIN_ALLOWED_CLIENTS` (IPs, CIDRs or hostnames) and `ORCH_TRUSTED_PROXIES`, enforced

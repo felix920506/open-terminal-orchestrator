@@ -51,7 +51,7 @@ To make the terminal the default, edit a model in **Admin Settings → Models** 
 | `SANDBOX_IMAGE` | `ghcr.io/open-webui/open-terminal:latest` | Use `ghcr.io/felix920506/open-terminal-scientific:latest` for the full scientific Python and Excel stack |
 | `OPEN_WEBUI_PORT` | `3000` | Host port for Open WebUI |
 | `MAX_RUNNING_SANDBOXES` | `20` | Running sandboxes at once; the least recently used one is stopped beyond this |
-| `OPEN_WEBUI_IMAGE` | `ghcr.io/open-webui/open-webui:v0.12.2` | Needs a release that supports orchestrator terminals (0.12+) |
+| `OPEN_WEBUI_IMAGE` | `ghcr.io/open-webui/open-webui:v0.12.2` | Tested with 0.11.4 and 0.12.2 |
 | `OTO_IMAGE` | `ghcr.io/felix920506/open-terminal-orchestrator:0.1.0` | |
 
 The terminal connection in `TERMINAL_SERVER_CONNECTIONS` is applied only on Open WebUI's first

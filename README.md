@@ -24,7 +24,7 @@ v0.1, a first version for testing.
   - a stopped container resumes in about 1.7 s
   - an `egress: none` sandbox has no network access
   - one sandbox cannot reach another
-- **Verified end to end against Open WebUI v0.12.2** (32/32 checks in
+- **Verified end to end against Open WebUI v0.11.4 and v0.12.2** (32/32 checks in
   `scripts/e2e_openwebui.py`, using `openai/gpt-4.1-nano` through OpenRouter). The checks
   cover:
   - orchestrator detection, and policy and lifecycle editing through Open WebUI
@@ -258,8 +258,10 @@ it by hand. A run costs well under $0.01 with `gpt-4.1-nano`.
 
 ## Known limitations
 
-- **Tested against Open WebUI v0.12.2 only.** The orchestrator protocol is undocumented on
-  Open WebUI's side. Rerun `scripts/e2e_openwebui.py` when upgrading Open WebUI.
+- **Tested against Open WebUI v0.11.4 and v0.12.2 only.** The orchestrator protocol is
+  undocumented on Open WebUI's side. Rerun `scripts/e2e_openwebui.py` when upgrading Open WebUI.
+  The two versions differ only in how the browser names the chat (`X-Session-Id` header in
+  0.11, a `/chats/{id}/` URL segment in 0.12), and both reach the orchestrator the same way.
 - Small models sometimes call `run_command` without `wait` (or with `wait: "10s"`, which gets
   a 422) and answer before the output arrives. This is model behaviour, not an orchestrator
   issue.

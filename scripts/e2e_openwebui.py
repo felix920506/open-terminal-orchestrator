@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
 import time
 import uuid
@@ -41,6 +42,22 @@ class OWUI:
 
     def req(self, method: str, path: str, **kw) -> httpx.Response:
         return self.http.request(method, path, headers={**self.h, **kw.pop("headers", {})}, **kw)
+
+    @property
+    def version(self) -> tuple[int, ...]:
+        if not hasattr(self, "_version"):
+            raw = self.http.get("/api/version").json().get("version", "0")
+            self._version = tuple(int(x) for x in re.findall(r"\d+", raw)[:3])
+        return self._version
+
+    def terminal(self, method: str, terminal_id: str, chat_id: str, path: str, **kw) -> httpx.Response:
+        """Call a terminal through Open WebUI's proxy in a chat's context, as the browser does.
+
+        0.12+ puts the chat in the URL; 0.11 sends it as X-Session-Id."""
+        if self.version >= (0, 12):
+            return self.req(method, f"/api/v1/terminals/{terminal_id}/chats/{chat_id}/{path}", **kw)
+        headers = {**kw.pop("headers", {}), "X-Session-Id": chat_id}
+        return self.req(method, f"/api/v1/terminals/{terminal_id}/{path}", headers=headers, **kw)
 
     def signup_or_login(self, name: str, email: str, password: str) -> None:
         r = self.http.post("/api/v1/auths/signin", json={"email": email, "password": password})
@@ -163,7 +180,7 @@ def sandbox_for(args, chat_id: str) -> dict | None:
 
 async def ws_terminal(args, ui: OWUI, chat_id: str) -> str:
     # Open WebUI's UI creates the session through the chat-scoped proxy, then attaches over WS.
-    r = ui.req("POST", f"/api/v1/terminals/{args.terminal_id}/chats/{chat_id}/api/terminals", json={})
+    r = ui.terminal("POST", args.terminal_id, chat_id, "api/terminals", json={})
     r.raise_for_status()
     sid = r.json()["id"]
     url = args.owui_url.replace("http", "ws", 1) + f"/api/v1/terminals/{args.terminal_id}/api/terminals/{sid}"
@@ -290,7 +307,7 @@ def main() -> int:
     if box_a:
         check("chat A: sandbox owned by the chatting user", box_a["owner_user_id"] == admin.user["id"])
 
-    r = admin.req("GET", f"/api/v1/terminals/{args.terminal_id}/chats/{chat_a.id}/files/cwd")
+    r = admin.terminal("GET", args.terminal_id, chat_a.id, "files/cwd")
     check("chat A: file browser opens in the persisted home", r.json().get("home") == "/home/user", r.text[:200])
 
     # ── chat B: separate sandbox ──────────────────────────────────────────
@@ -309,9 +326,11 @@ def main() -> int:
     msg = chat_a.send("Use run_command with wait=10 to run: cat ~/hello.txt")
     check("chat A (turn 2): file still there", "from chat A" in outputs_text(msg), outputs_text(msg)[:200])
 
-    r = admin.req(
+    r = admin.terminal(
         "GET",
-        f"/api/v1/terminals/{args.terminal_id}/chats/{chat_a.id}/files/read",
+        args.terminal_id,
+        chat_a.id,
+        "files/read",
         params={"path": "/home/user/hello.txt"},
     )
     check(
@@ -319,9 +338,11 @@ def main() -> int:
         r.status_code == 200 and "from chat A" in r.text,
         r.text[:200],
     )
-    r = admin.req(
+    r = admin.terminal(
         "GET",
-        f"/api/v1/terminals/{args.terminal_id}/chats/{chat_b.id}/files/read",
+        args.terminal_id,
+        chat_b.id,
+        "files/read",
         params={"path": "/home/user/hello.txt"},
     )
     check(
@@ -331,9 +352,11 @@ def main() -> int:
     )
 
     # ── another user cannot reach chat A's sandbox by guessing its id ─────
-    r = bob.req(
+    r = bob.terminal(
         "GET",
-        f"/api/v1/terminals/{args.terminal_id}/chats/{chat_a.id}/files/read",
+        args.terminal_id,
+        chat_a.id,
+        "files/read",
         params={"path": "/home/user/hello.txt"},
     )
     check(
@@ -364,9 +387,11 @@ def main() -> int:
             "from chat A" in outputs_text(msg),
             "(model-dependent) " + outputs_text(msg)[:160],
         )
-        r = admin.req(
+        r = admin.terminal(
             "GET",
-            f"/api/v1/terminals/{args.terminal_id}/chats/{chat_a.id}/files/read",
+            args.terminal_id,
+            chat_a.id,
+            "files/read",
             params={"path": "/home/user/hello.txt"},
         )
         check("chat A: data intact after stop/resume", "from chat A" in r.text, r.text[:120])
@@ -386,9 +411,11 @@ def main() -> int:
     )
     check("admin refresh through Open WebUI", r.status_code == 200 and r.json().get("refreshed", 0) >= 1, r.text[:200])
     check("chat A: dehydrated after refresh", sandbox_for(args, chat_a.id)["state"] == "dehydrated")
-    r = admin.req(
+    r = admin.terminal(
         "GET",
-        f"/api/v1/terminals/{args.terminal_id}/chats/{chat_a.id}/files/read",
+        args.terminal_id,
+        chat_a.id,
+        "files/read",
         params={"path": "/home/user/hello.txt"},
     )
     check("chat A: recreated container still has the data", "from chat A" in r.text, r.text[:120])
@@ -401,9 +428,11 @@ def main() -> int:
     check("model called reset_sandbox", "reset_sandbox" in tool_names(msg), f"tools={tool_names(msg)}")
     box = sandbox_for(args, chat_a.id)
     check("chat A: generation incremented by reset", bool(box) and box["generation"] >= 2, json.dumps(box)[:200])
-    r = admin.req(
+    r = admin.terminal(
         "GET",
-        f"/api/v1/terminals/{args.terminal_id}/chats/{chat_a.id}/files/read",
+        args.terminal_id,
+        chat_a.id,
+        "files/read",
         params={"path": "/home/user/hello.txt"},
     )
     check("chat A: file gone after reset", "from chat A" not in r.text, f"{r.status_code} {r.text[:120]}")
