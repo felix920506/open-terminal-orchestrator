@@ -61,6 +61,9 @@ uv run oto --key devkey ls
 
 ## Production (Docker Compose)
 
+For a complete stack that includes Open WebUI with the terminal already connected, see
+[`examples/open-webui`](examples/open-webui).
+
 ```bash
 cd deploy
 export ORCH_API_KEY=$(openssl rand -hex 32) ORCH_ADMIN_API_KEY=$(openssl rand -hex 32) ORCH_SECRET_KEY=$(openssl rand -hex 32)
