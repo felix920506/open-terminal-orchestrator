@@ -1,0 +1,69 @@
+# Add per-chat terminal sandboxes to an existing Open WebUI Compose project.
+#
+# Copy this file next to your docker-compose.yml, add the keys to your .env, then either
+#   docker compose -f docker-compose.yml -f docker-compose.terminals.yml up -d
+# or put  COMPOSE_FILE=docker-compose.yml:docker-compose.terminals.yml  in .env and keep
+# using plain `docker compose up -d`.
+#
+# If your Open WebUI service is not called `open-webui`, rename the key under `services:`
+# below and the entry in ORCH_ALLOWED_CLIENTS to match.
+
+services:
+  # Merged into your existing Open WebUI service: only adds the network to reach the
+  # orchestrator. `default` keeps it on the network it already uses.
+  open-webui:
+    networks: [default, terminals]
+
+  orchestrator:
+    image: ghcr.io/felix920506/open-terminal-orchestrator:${OTO_VERSION:-0.1.0}
+    # Fixed name: the orchestrator attaches itself to each sandbox's private network.
+    container_name: oto-orchestrator
+    restart: unless-stopped
+    depends_on: [socket-proxy]
+    environment:
+      ORCH_API_KEY: ${ORCH_API_KEY:?set ORCH_API_KEY in .env}
+      ORCH_ADMIN_API_KEY: ${ORCH_ADMIN_API_KEY:?set ORCH_ADMIN_API_KEY in .env}
+      ORCH_SECRET_KEY: ${ORCH_SECRET_KEY:?set ORCH_SECRET_KEY in .env}
+      ORCH_DOCKER_HOST: tcp://socket-proxy:2375
+      ORCH_SANDBOX_ACCESS: network
+      ORCH_SELF_CONTAINER: oto-orchestrator
+      ORCH_DEFAULT_IMAGE: ${SANDBOX_IMAGE:-ghcr.io/open-webui/open-terminal:latest}
+      ORCH_IMAGE_ALLOWLIST: ghcr.io/open-webui/open-terminal*,ghcr.io/felix920506/open-terminal-scientific*
+      ORCH_MAX_RUNNING_GLOBAL: ${MAX_RUNNING_SANDBOXES:-20}
+      # Only Open WebUI (and `docker exec … oto` inside this container) may call the orchestrator.
+      ORCH_ALLOWED_CLIENTS: open-webui,127.0.0.1
+    volumes:
+      - orchestrator-data:/data
+    networks: [control, terminals]
+
+  # Narrow Docker API access for the orchestrator; it never sees the raw socket.
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:v0.4.2
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      IMAGES: 1
+      NETWORKS: 1
+      VOLUMES: 1
+      POST: 1
+      DELETE: 1
+      ALLOW_START: 1
+      ALLOW_STOP: 1
+      ALLOW_RESTARTS: 0
+      EXEC: 0
+      BUILD: 0
+      SWARM: 0
+      SECRETS: 0
+      SYSTEM: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [control]
+
+volumes:
+  orchestrator-data:
+
+networks:
+  terminals:
+    internal: true
+  control:
+    internal: true

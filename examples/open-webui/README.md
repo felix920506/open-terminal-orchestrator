@@ -3,6 +3,9 @@
 A single Compose file that runs Open WebUI with a private terminal sandbox for every chat.
 The terminal connection is pre-registered, so it works without any setup in the UI.
 
+Already running Open WebUI with Compose? Use [`examples/add-to-existing`](../add-to-existing)
+instead.
+
 | Service | Purpose |
 |---|---|
 | `open-webui` | Open WebUI on http://localhost:3000 |

@@ -61,8 +61,11 @@ uv run oto --key devkey ls
 
 ## Production (Docker Compose)
 
-For a complete stack that includes Open WebUI with the terminal already connected, see
-[`examples/open-webui`](examples/open-webui).
+Ready-made Compose setups:
+- **New install:** [`examples/open-webui`](examples/open-webui) runs Open WebUI with the terminal
+  already connected.
+- **Existing Open WebUI in Compose:** [`examples/add-to-existing`](examples/add-to-existing) is
+  one drop-in file plus a one-time connection step. It keeps your data and settings.
 
 ```bash
 cd deploy
