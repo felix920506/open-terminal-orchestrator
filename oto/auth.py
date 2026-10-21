@@ -69,3 +69,34 @@ def require_admin_key(settings: Settings, request: Request) -> None:
     if _eq(token, expected):
         return
     raise HTTPException(status_code=401, detail="Invalid credentials")
+
+
+SECRET_HEADERS = {"authorization", "proxy-authorization", "cookie", "x-api-key"}
+
+
+def describe_request(request: Request, detail: object = None) -> str:
+    """One-line request description for troubleshooting logs; credentials are never included."""
+    settings = request.app.state.oto.settings if hasattr(request.app.state, "oto") else None
+    headers = {}
+    for name, value in request.headers.items():
+        if name.lower() == "authorization":
+            token = bearer_token(request)
+            kind = "missing or not bearer"
+            if token and settings:
+                if _eq(token, settings.api_key):
+                    kind = "connection key"
+                elif _eq(token, settings.admin_api_key):
+                    kind = "admin key"
+                else:
+                    kind = "unrecognised"
+            headers[name] = f"<redacted: {kind}>"
+        elif name.lower() in SECRET_HEADERS:
+            headers[name] = "<redacted>"
+        else:
+            headers[name] = value
+    client = request.client.host if request.client else "?"
+    query = f"?{request.url.query}" if request.url.query else ""
+    parts = [f"{request.method} {request.url.path}{query} from {client}", f"detail={detail!r}", f"headers={headers}"]
+    if settings:
+        parts.append(f"held_uploads={'on' if settings.stage_uploads else 'off (ORCH_STAGE_UPLOADS)'}")
+    return "; ".join(parts)

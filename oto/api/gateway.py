@@ -87,13 +87,18 @@ def _context_id(request_headers, policy: EffectivePolicy, user_id: str) -> str:
     if request_headers.get("x-session-id"):
         # A chat is known but Open WebUI sent no context: the connection is on "Shared".
         _warn_shared_context()
-    raise HTTPException(status_code=409, detail=CONTEXT_REQUIRED)
+        raise HTTPException(status_code=409, detail=CONTEXT_REQUIRED)
+    raise HTTPException(status_code=409, detail=NO_CHAT_YET)
 
 
 CONTEXT_REQUIRED = (
     "This terminal needs a per-chat context. In Open WebUI, edit the connection under Admin Settings → "
     "Integrations → Open Terminal, expand 'Orchestrator' and set Terminal Contexts → Chat to 'Per chat'. "
     "Temporary chats cannot use it."
+)
+NO_CHAT_YET = (
+    "This request has no chat: Open WebUI sends files attached on a new chat before the chat exists. "
+    "Send a message first, or set ORCH_STAGE_UPLOADS=true and install the Terminal uploads filter."
 )
 _warned_shared = False
 

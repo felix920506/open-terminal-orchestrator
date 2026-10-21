@@ -127,3 +127,15 @@ def test_new_chat_cwd_follows_the_policy_working_dir(staging_client):
     assert upload(c, directory="/work").json()["path"] == "/work/a.txt"
     put_policy(c, "dev", {"image": IMAGE}, {"working_dir": ""})  # image decides: probed value
     assert c.get("/p/dev/files/cwd", headers=no_chat()).json()["cwd"] == "/home/user"
+
+
+def test_no_chat_409_is_explained_and_logged(client, caplog):
+    caplog.set_level("WARNING", logger="oto")
+    r = upload(client, directory="/")
+    assert r.status_code == 409
+    assert "ORCH_STAGE_UPLOADS" in r.json()["detail"] and "Per chat" not in r.json()["detail"]
+    (line,) = [rec.getMessage() for rec in caplog.records if rec.getMessage().startswith("409 Conflict")]
+    assert "POST /p/dev/files/upload?directory=%2F" in line or "POST /p/dev/files/upload?directory=/" in line
+    assert "'x-user-id': 'u1'" in line
+    assert "<redacted: connection key>" in line and KEY not in line
+    assert "held_uploads=off (ORCH_STAGE_UPLOADS)" in line

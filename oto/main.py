@@ -8,12 +8,13 @@ import secrets
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from . import __version__
 from .api import admin, gateway
-from .auth import require_connection_key
+from .auth import describe_request, require_connection_key
 from .client_filter import ClientAllowlist, ClientFilterMiddleware
 from .config import Settings, get_settings
 from .manager import CapacityError, SandboxError
@@ -68,10 +69,11 @@ def create_app(
             admin._spawn_warmup(svc, policy.id)
         svc.reaper.start()
         log.info(
-            "Open Terminal Orchestrator %s ready (access=%s, airgapped=%s)",
+            "Open Terminal Orchestrator %s ready (access=%s, airgapped=%s, held uploads=%s)",
             __version__,
             settings.sandbox_access,
             settings.airgapped,
+            f"on, in {settings.staging_dir}" if settings.stage_uploads else "off",
         )
         try:
             yield
@@ -98,6 +100,12 @@ def create_app(
     @app.exception_handler(PolicyError)
     async def _policy_error(request: Request, exc: PolicyError):
         return JSONResponse({"detail": str(exc)}, status_code=exc.status_code)
+
+    @app.exception_handler(HTTPException)
+    async def _http_error(request: Request, exc: HTTPException):
+        if exc.status_code == 409:
+            log.warning("409 Conflict: %s", describe_request(request, exc.detail))
+        return await http_exception_handler(request, exc)
 
     @app.get("/healthz", include_in_schema=False)
     async def healthz():
