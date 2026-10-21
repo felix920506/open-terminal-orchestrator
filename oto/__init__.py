@@ -1,3 +1,3 @@
 """Open Terminal Orchestrator: per-conversation Open Terminal sandboxes for Open WebUI."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

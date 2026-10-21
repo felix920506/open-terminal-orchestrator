@@ -53,7 +53,9 @@ Optional settings for `.env`:
 |---|---|---|
 | `SANDBOX_IMAGE` | `ghcr.io/open-webui/open-terminal:latest` | `ghcr.io/felix920506/open-terminal-scientific:latest` adds the full scientific Python and Excel stack |
 | `MAX_RUNNING_SANDBOXES` | `20` | Sandboxes running at once |
-| `OTO_VERSION` | `0.1.0` | Orchestrator image tag |
+| `OTO_VERSION` | `0.1.1` | Orchestrator image tag |
+
+To change `SANDBOX_IMAGE` later, see [changing the sandbox image](../open-webui/README.md#changing-the-sandbox-image).
 
 ## 3. Start
 
@@ -83,8 +85,8 @@ In Open WebUI, go to **Admin Settings → Integrations → Open Terminal** and a
 | Chat context | per chat (`chat_id`). This gives each chat its own sandbox. |
 
 1. Click **Verify**. It should report **Orchestrator**.
-2. Open the policy and check the image, CPU, memory, storage and idle timeout. Saving the
-   policy here overrides `SANDBOX_IMAGE`.
+2. Open the policy and check the image, CPU, memory, storage and idle timeout. Setting a
+   different image here overrides `SANDBOX_IMAGE` from then on.
 3. Save. By default only admins can use the connection, so grant access to users or groups
    if you want others to use it.
 
@@ -144,7 +146,7 @@ docker volume rm "${p}_orchestrator-data"
 ## Open WebUI not in Compose?
 
 Run the orchestrator on its own with [`deploy/docker-compose.yml`](../../deploy/docker-compose.yml),
-using `OTO_IMAGE=ghcr.io/felix920506/open-terminal-orchestrator:0.1.0` and `--no-build`. Then
+using `OTO_IMAGE=ghcr.io/felix920506/open-terminal-orchestrator:0.1.1` and `--no-build`. Then
 connect as in step 4.
 - **Open WebUI started with `docker run` on the same host:** set `OTO_WEBUI_NETWORK` to a
   Docker network Open WebUI is attached to, and `ORCH_ALLOWED_CLIENTS` to its container name.

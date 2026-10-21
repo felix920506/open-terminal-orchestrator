@@ -1,6 +1,6 @@
 [project]
 name = "open-terminal-orchestrator"
-version = "0.1.0"
+version = "0.1.1"
 description = "Per-conversation Open Terminal sandboxes for Open WebUI"
 readme = "README.md"
 requires-python = ">=3.11"
