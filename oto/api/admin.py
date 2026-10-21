@@ -124,7 +124,13 @@ async def status(request: Request, svc: Services = Depends(connection_auth)):
             for name, allowlist in (getattr(request.app.state, "allowlists", None) or {}).items()
         },
         "policies": [
-            {"id": p.id, "status": p.status, "detail": p.status_detail, "image_ref": p.image_ref}
+            {
+                "id": p.id,
+                "image": (p.data or {}).get("image") or svc.settings.default_image or None,
+                "status": p.status,
+                "detail": p.status_detail,
+                "image_ref": p.image_ref,
+            }
             for p in await svc.policies.list()
         ],
     }

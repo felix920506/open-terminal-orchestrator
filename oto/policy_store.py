@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from .config import Settings
 from .crypto import SecretBox
-from .db import Database, Policy
+from .db import Database, Policy, StateEntry
 from .policies import (
     DEFAULT_IDLE_TIMEOUT_MINUTES,
     EffectivePolicy,
@@ -125,13 +125,58 @@ class PolicyStore:
             await s.commit()
 
     async def ensure_default(self) -> None:
-        if not self.settings.default_image or not self.settings.default_policy_id:
+        """Create the default policy, and keep its image in step with ORCH_DEFAULT_IMAGE.
+
+        The image follows the env var across restarts until someone sets a different image
+        through the policy API (e.g. in Open WebUI); from then on the API value wins.
+        """
+        policy_id, image = self.settings.default_policy_id, self.settings.default_image
+        if not image or not policy_id:
             return
-        if await self.get(self.settings.default_policy_id) is None:
-            log.info(
-                "Creating default policy %r with image %s", self.settings.default_policy_id, self.settings.default_image
+        row = await self.get(policy_id)
+        if row is None:
+            log.info("Creating default policy %r with image %s", policy_id, image)
+            await self.put(policy_id, {"image": image, "storage": "5Gi"})
+            await self._set_state("default_image", {"policy_id": policy_id, "image": image})
+            return
+
+        current = (row.data or {}).get("image")
+        seeded = await self._get_state("default_image")
+        # Before this was tracked (<= 0.1.0) the stored image can only have come from the env var
+        # or an admin edit; assume the env var, since changing it is why this code runs.
+        last_env_image = seeded.get("image") if seeded.get("policy_id") == policy_id else current
+        if current == image:
+            pass
+        elif current not in (last_env_image, None):
+            if image == last_env_image:
+                return
+            log.warning(
+                "Policy %r uses image %s, set through the policy API; ignoring ORCH_DEFAULT_IMAGE=%s. "
+                "Change the image in Open WebUI, or set it back to %s to let ORCH_DEFAULT_IMAGE manage it again.",
+                policy_id,
+                current,
+                image,
+                last_env_image,
             )
-            await self.put(self.settings.default_policy_id, {"image": self.settings.default_image, "storage": "5Gi"})
+            return
+        else:
+            log.info("Default policy %r: image %s -> %s (ORCH_DEFAULT_IMAGE)", policy_id, current, image)
+            await self.put(policy_id, {**self.public_data(row), "image": image})
+        await self._set_state("default_image", {"policy_id": policy_id, "image": image})
+
+    async def _get_state(self, key: str) -> dict:
+        async with self.db.session() as s:
+            row = await s.get(StateEntry, key)
+            return dict(row.value) if row else {}
+
+    async def _set_state(self, key: str, value: dict) -> None:
+        async with self.db.session() as s:
+            row = await s.get(StateEntry, key)
+            if row is None:
+                s.add(StateEntry(key=key, value=value))
+            else:
+                row.value = value
+            await s.commit()
 
     # ── resolution ────────────────────────────────────────────────────────
 

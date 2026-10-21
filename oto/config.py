@@ -75,6 +75,8 @@ class Settings(BaseSettings):
         return "never" if self.airgapped else self.pull_policy
 
     def image_allowed(self, image: str) -> bool:
+        if self.default_image and image == self.default_image:  # set by the operator, so trusted
+            return True
         patterns = [p.strip() for p in self.image_allowlist.split(",") if p.strip()]
         return any(fnmatch.fnmatchcase(image, p) for p in patterns)
 

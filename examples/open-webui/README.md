@@ -55,11 +55,27 @@ To make the terminal the default, edit a model in **Admin Settings → Models** 
 | `OPEN_WEBUI_PORT` | `3000` | Host port for Open WebUI |
 | `MAX_RUNNING_SANDBOXES` | `20` | Running sandboxes at once; the least recently used one is stopped beyond this |
 | `OPEN_WEBUI_IMAGE` | `ghcr.io/open-webui/open-webui:v0.12.2` | Tested with 0.11.4 and 0.12.2 |
-| `OTO_IMAGE` | `ghcr.io/felix920506/open-terminal-orchestrator:0.1.0` | |
+| `OTO_IMAGE` | `ghcr.io/felix920506/open-terminal-orchestrator:0.1.1` | |
 
 The terminal connection in `TERMINAL_SERVER_CONNECTIONS` is applied only on Open WebUI's first
 start. After that, edit it under **Admin Settings → Integrations → Open Terminal**. If you change
 `ORCH_API_KEY` later, update the key there too.
+
+### Changing the sandbox image
+
+Change `SANDBOX_IMAGE` in `.env` and run `docker compose up -d`. The orchestrator switches the
+`default` policy to the new image. Each chat's sandbox moves to it the next time the sandbox
+starts, and its files are kept. Check the result with:
+
+```bash
+docker exec oto-orchestrator oto status   # policies → "image" and "status": "ready"
+```
+
+- On an airgapped host, `docker load` the image first, under exactly the name in
+  `SANDBOX_IMAGE`. Until then the policy shows `"status": "unavailable"`.
+- If an admin has set a different image in Open WebUI's policy editor, that choice wins and
+  `SANDBOX_IMAGE` is ignored (the orchestrator logs a warning). Change it there instead, or set
+  it back to the previous `SANDBOX_IMAGE` value to let `.env` manage it again.
 
 ## Optional: chat cleanup and a reset button
 

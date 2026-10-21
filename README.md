@@ -104,7 +104,9 @@ cd deploy && docker compose -f docker-compose.yml -f docker-compose.airgapped.ym
 - forces `egress: none` for every policy
 - rejects lifecycle updates that ask for egress
 
-A policy whose image is not loaded shows up as `unavailable` in `oto status`.
+A policy whose image is not loaded shows up as `unavailable` in `oto status`. Load the image
+under exactly the name the policy uses (`docker load` keeps the name it was saved with, and
+`docker tag` can rename it), then restart the orchestrator.
 
 ### Sandbox images
 
@@ -201,7 +203,7 @@ ORCH_ADMIN_ALLOWED_CLIENTS=open-webui,10.0.5.0/24  # optional: who may manage sa
 | `ORCH_IMAGE_ALLOWLIST` | `ghcr.io/open-webui/open-terminal*` | Comma-separated globs |
 | `ORCH_PULL_POLICY` | `if-not-present` | `never`, `if-not-present` or `always-on-policy-save` |
 | `ORCH_AIRGAPPED` | `false` | See above |
-| `ORCH_DEFAULT_IMAGE` / `ORCH_DEFAULT_POLICY_ID` | – / `default` | Creates the default policy at startup. Unknown policy IDs fall back to it. |
+| `ORCH_DEFAULT_IMAGE` / `ORCH_DEFAULT_POLICY_ID` | – / `default` | Creates the default policy at startup and keeps its image in step with this value on every restart, unless the image was since changed through the policy API (e.g. in Open WebUI). The image is always allowed, whatever `ORCH_IMAGE_ALLOWLIST` says. Unknown policy IDs fall back to the default policy. |
 | `ORCH_MAX_RUNNING_GLOBAL` | `50` | Hot sandbox cap. The least recently used idle sandbox is stopped when it is reached. |
 | `ORCH_REAPER_INTERVAL_SECONDS` | `30` | |
 

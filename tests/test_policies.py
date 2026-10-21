@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from oto.db import Policy
+from oto.db import Policy, StateEntry
 from oto.policies import parse_cpu, parse_memory
 
 from .conftest import CONN_H, IMAGE, chat_headers, put_policy
@@ -97,3 +97,56 @@ def test_missing_image_airgapped(make_client, runtime):
     assert r.status_code == 503
     status = c.get("/api/v1/status", headers=CONN_H).json()
     assert status["policies"][0]["status"] == "unavailable"
+
+
+SCI = "ghcr.io/felix920506/open-terminal-scientific:latest"
+
+
+def _default_image(c) -> str:
+    return c.get("/api/v1/policies/default", headers=CONN_H).json()["data"]["image"]
+
+
+def test_default_image_follows_env_across_restarts(make_client):
+    assert _default_image(make_client(default_image=IMAGE)) == IMAGE
+    c = make_client(default_image=SCI)  # restart with a changed ORCH_DEFAULT_IMAGE
+    assert _default_image(c) == SCI
+    status = c.get("/api/v1/status", headers=CONN_H).json()
+    assert status["policies"][0]["id"] == "default" and status["policies"][0]["image"] == SCI
+
+
+def test_default_image_keeps_other_policy_fields(make_client):
+    c = make_client(default_image=IMAGE)
+    put_policy(c, "default", {"image": IMAGE, "memory_limit": "2Gi", "env": {"A": "1"}})
+    got = make_client(default_image=SCI).get("/api/v1/policies/default", headers=CONN_H).json()["data"]
+    assert got == {"image": SCI, "memory_limit": "2Gi", "env": {"A": "1"}}
+
+
+def test_default_image_set_through_api_wins_over_env(make_client):
+    c = make_client(default_image=IMAGE, image_allowlist="*")
+    put_policy(c, "default", {"image": "registry.local/custom:1"})
+    assert _default_image(make_client(default_image=IMAGE, image_allowlist="*")) == "registry.local/custom:1"
+    assert _default_image(make_client(default_image=SCI, image_allowlist="*")) == "registry.local/custom:1"
+    # Setting it back to the env-managed image hands control back to the env var.
+    c = make_client(default_image=IMAGE, image_allowlist="*")
+    put_policy(c, "default", {"image": IMAGE})
+    assert _default_image(make_client(default_image=SCI, image_allowlist="*")) == SCI
+
+
+def test_default_image_upgrade_from_untracked_db(make_client):
+    c = make_client(default_image=IMAGE)
+    db = c.app.state.oto.db
+
+    async def forget():  # databases from 0.1.0 have no record of the env image
+        async with db.session() as s:
+            await s.delete(await s.get(StateEntry, "default_image"))
+            await s.commit()
+
+    c.portal.call(forget)
+    assert _default_image(make_client(default_image=SCI)) == SCI
+
+
+def test_default_image_bypasses_allowlist(make_client):
+    c = make_client(default_image="registry.local/open-terminal-scientific:1")
+    assert _default_image(c) == "registry.local/open-terminal-scientific:1"
+    r = c.put("/api/v1/policies/other", json={"image": "registry.local/other:1"}, headers=CONN_H)
+    assert r.status_code == 400
