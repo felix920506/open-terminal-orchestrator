@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
 
 import jwt
 import pytest
@@ -300,16 +299,23 @@ def test_concurrent_cold_requests_create_one_sandbox(client, runtime):
     assert len([c for c in runtime.calls if c.startswith("create oto-sbx-")]) == 1
 
 
-def test_ws_user_from_query_for_older_open_webui(client):
-    # Open WebUI < 0.11.4 sends the user only as ?user_id= on the terminal WebSocket.
+def test_ws_user_and_chat_for_older_open_webui(client, monkeypatch):
+    # Open WebUI < 0.11.4 sends the user only as ?user_id= and no chat id on the terminal WebSocket.
+    seen = {}
+
+    def fake_connect(url, additional_headers=None, **kw):
+        seen.update(url=url, headers=additional_headers)
+        raise OSError("no upstream in tests")
+
+    monkeypatch.setattr(gateway, "ws_connect", fake_connect)
     h = {"X-Terminal-Context-Id": "chat:a"}
     with client.websocket_connect("/p/dev/api/terminals/s1?user_id=u7", headers=h) as ws:
         ws.send_text(json.dumps({"type": "auth", "token": KEY}))
-        for _ in range(100):  # the fake runtime has no WebSocket upstream; stop once it's routed
-            if sandboxes(client):
-                break
-            time.sleep(0.02)
-        ws.close()
+        with pytest.raises(WebSocketDisconnect) as e:
+            ws.receive_text()
+    assert e.value.code == 1011
+    assert seen["url"].endswith("/api/terminals/s1")
+    assert seen["headers"] == {"X-User-Id": "u7", "X-Session-Id": "a"}
     (box,) = sandboxes(client)
     assert box["context_id"] == "chat:a" and box["owner_user_id"] == "u7"
 
