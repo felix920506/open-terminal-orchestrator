@@ -72,6 +72,13 @@ RESET_OPERATION = {
 }
 
 
+# Stored alongside the image's api_config (and stripped before it is served).
+CWD_KEY = "_oto_initial_cwd"
+# Open Terminal images run as "user"; used for cache entries probed before the cwd was recorded.
+# Only consulted for policies that leave the working directory to the image (working_dir: "").
+DEFAULT_CWD = {"cwd": "/home/user", "home": "/home/user", "root": {"path": "/home/user", "label": "Home"}}
+
+
 def sandbox_prompt_note(policy: EffectivePolicy) -> str:
     lc = policy.lifecycle
     parts = [
@@ -193,6 +200,10 @@ class SpecService:
                 r = await self.http.get(f"{url}/system", headers=auth, timeout=10)
                 if r.status_code == 200:
                     system_prompt = (r.json() or {}).get("prompt")
+            # Where a fresh sandbox's file browser starts; uploads made before a chat exists go here.
+            r = await self.http.get(f"{url}/files/cwd", headers=auth, timeout=10)
+            if r.status_code == 200 and isinstance(r.json(), dict) and r.json().get("cwd"):
+                api_config = {**api_config, CWD_KEY: r.json()}
             return SpecCache(
                 image_ref=policy.image_ref, openapi=openapi, api_config=api_config, system_prompt=system_prompt
             )
@@ -222,8 +233,17 @@ class SpecService:
 
     def api_config(self, entry: SpecCache) -> dict:
         cfg = copy.deepcopy(entry.api_config)
+        cfg.pop(CWD_KEY, None)
         cfg.setdefault("features", {})["system"] = True
         return cfg
+
+    def initial_cwd(self, entry: SpecCache, policy: EffectivePolicy) -> dict:
+        """The ``/files/cwd`` answer of a fresh sandbox of this policy."""
+        lc = policy.lifecycle
+        wd = lc.home_path if lc.working_dir is None else lc.working_dir
+        if wd:  # the orchestrator sets the container's working directory
+            return {"cwd": wd, "home": wd, "root": {"path": wd, "label": "Home"}}
+        return copy.deepcopy(entry.api_config.get(CWD_KEY) or DEFAULT_CWD)  # the image's own
 
     def system(self, entry: SpecCache, policy: EffectivePolicy) -> dict:
         note = sandbox_prompt_note(policy)

@@ -7,9 +7,12 @@ never reach it through Open WebUI even though it shares the connection key.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import posixpath
 from datetime import timedelta
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -17,8 +20,10 @@ from sqlalchemy import select
 from .. import __version__
 from ..auth import require_admin_key, require_connection_key
 from ..db import AuditEvent, SandboxState, utcnow
+from ..manager import OwnershipError, SandboxError
 from ..policy_store import PolicyError
 from ..services import Services, services
+from .gateway import CONTEXT_RE
 
 log = logging.getLogger(__name__)
 
@@ -123,6 +128,7 @@ async def status(request: Request, svc: Services = Depends(connection_auth)):
             name: (allowlist.describe() if allowlist else None)
             for name, allowlist in (getattr(request.app.state, "allowlists", None) or {}).items()
         },
+        "held_uploads": await asyncio.to_thread(svc.staging.stats) if svc.staging else None,
         "policies": [
             {
                 "id": p.id,
@@ -251,6 +257,66 @@ async def destroy_context(
     for row in rows:
         await svc.manager.destroy(row, reason="context_deleted", actor="system")
     return {"destroyed": len(rows)}
+
+
+class UploadClaimForm(BaseModel):
+    context_id: str
+    user_id: str
+    paths: list[str]
+
+
+@router.post("/terminals/uploads/claim")
+async def claim_uploads(form: UploadClaimForm, svc: Services = Depends(admin_auth)):
+    """Used by the Open WebUI "Terminal uploads" filter function.
+
+    Delivers uploads that were held because they were made before the chat existed into the
+    chat's sandbox. Only the user's own held files at exactly these paths are delivered.
+    """
+    if svc.staging is None:
+        return {"delivered": [], "failed": [], "enabled": False}
+    if not form.context_id.startswith("chat:") or not CONTEXT_RE.match(form.context_id) or not form.user_id:
+        raise HTTPException(status_code=400, detail="A chat context_id and user_id are required")
+    delivered, failed = [], []
+    async with svc.staging.delivery_lock(form.user_id):
+        for item in await svc.staging.take(form.user_id, form.paths[:200]):
+            try:
+                ep = await svc.manager.acquire(
+                    item.policy_id, form.context_id, form.user_id, form.context_id.removeprefix("chat:")
+                )
+            except OwnershipError as e:
+                raise HTTPException(status_code=403, detail=str(e)) from e
+            except (SandboxError, PolicyError) as e:
+                log.warning("Cannot deliver held upload %s: %s", item.path, e)
+                failed.append(item.path)
+                continue
+            svc.manager.pins[ep.sandbox_id] += 1
+            try:
+                with svc.staging.open(item) as fh:
+                    r = await svc.proxy_http.post(
+                        f"{ep.url}/files/upload",
+                        params={"directory": posixpath.dirname(item.path)},
+                        headers={
+                            "authorization": f"Bearer {ep.api_key}",
+                            "x-user-id": form.user_id,
+                            "x-session-id": form.context_id.removeprefix("chat:"),
+                        },
+                        files={"file": (posixpath.basename(item.path), fh)},
+                    )
+                r.raise_for_status()
+                if r.json().get("path") != item.path:
+                    log.warning("Held upload %s landed at %s", item.path, r.json().get("path"))
+            except (OSError, ValueError, httpx.HTTPError) as e:
+                log.warning("Delivering held upload %s to %s failed: %s", item.path, ep.sandbox_id, e)
+                failed.append(item.path)
+                continue
+            finally:
+                svc.manager.pins[ep.sandbox_id] -= 1
+                if svc.manager.pins[ep.sandbox_id] <= 0:
+                    del svc.manager.pins[ep.sandbox_id]
+            await svc.staging.done(item)
+            delivered.append(item.path)
+            log.info("Delivered held upload %s to %s (%s)", item.path, form.context_id, ep.sandbox_id)
+    return {"delivered": delivered, "failed": failed}
 
 
 @router.post("/terminals/gc")

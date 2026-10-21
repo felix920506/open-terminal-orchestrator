@@ -55,6 +55,15 @@ class Settings(BaseSettings):
     publish_host: str = "127.0.0.1"
     egress_network: str = "oto-egress"
 
+    # Uploads Open WebUI sends before a chat exists (no chat id yet). When enabled they are
+    # held here and delivered into the chat's sandbox once the "Terminal uploads" filter
+    # function (integrations/owui) reports which chat they were attached to.
+    stage_uploads: bool = False
+    staging_dir: str = "./data/staging"
+    staging_ttl_minutes: int = 60
+    staging_max_file_mb: int = 200
+    staging_max_user_mb: int = 1000
+
     max_running_global: int = 50
     reaper_interval_seconds: float = 30.0
     activity_flush_seconds: float = 15.0

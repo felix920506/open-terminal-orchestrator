@@ -11,6 +11,7 @@ from .db import SandboxState, utcnow
 from .manager import SandboxManager
 from .policy_store import PolicyError
 from .runtime.base import NotFound, RuntimeError_
+from .staging import UploadStaging
 
 log = logging.getLogger(__name__)
 
@@ -18,9 +19,10 @@ S = SandboxState
 
 
 class Reaper:
-    def __init__(self, manager: SandboxManager, interval: float):
+    def __init__(self, manager: SandboxManager, interval: float, staging: UploadStaging | None = None):
         self.manager = manager
         self.interval = interval
+        self.staging = staging
         self._task: asyncio.Task | None = None
         self._stopping = asyncio.Event()
 
@@ -48,6 +50,8 @@ class Reaper:
         await m.flush_activity(force=True)
         now = utcnow()
         stats = {"stopped": 0, "dehydrated": 0, "purged": 0, "crashed": 0}
+        if self.staging:
+            stats["uploads_expired"] = await asyncio.to_thread(self.staging.purge_expired)
         policies: dict = {}
 
         for row in await m.list():

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import itertools
 import json
+import posixpath
 import uuid
 from dataclasses import dataclass, field
+from email import policy as email_policy
+from email.parser import BytesParser
 
 import httpx
 
@@ -162,6 +165,16 @@ class FakeRuntime:
             body = json.loads(request.content)
             self.volume_files(c)[body["path"]] = body["content"]
             return httpx.Response(200, json={"ok": True})
+        if path == "/files/cwd":
+            return httpx.Response(200, json={"cwd": "/home/user", "home": "/home/user"})
+        if path == "/files/upload" and request.method == "POST":
+            msg = BytesParser(policy=email_policy.HTTP).parsebytes(
+                b"Content-Type: " + request.headers["content-type"].encode() + b"\r\n\r\n" + request.content
+            )
+            (part,) = msg.iter_parts()
+            target = posixpath.join(request.url.params["directory"], part.get_filename())
+            self.volume_files(c)[target] = part.get_payload(decode=True).decode()
+            return httpx.Response(200, json={"path": target, "size": len(part.get_payload(decode=True))})
         if path == "/files/read":
             p = request.url.params["path"]
             files = self.volume_files(c)

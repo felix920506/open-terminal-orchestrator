@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir --no-index --find-links /wheels open-terminal-orc
 USER oto
 WORKDIR /data
 ENV ORCH_DATABASE_URL=sqlite+aiosqlite:////data/oto.db \
+    ORCH_STAGING_DIR=/data/staging \
     ORCH_LISTEN_HOST=0.0.0.0 \
     ORCH_LISTEN_PORT=8080
 EXPOSE 8080

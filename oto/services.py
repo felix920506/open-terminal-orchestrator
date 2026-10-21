@@ -17,6 +17,7 @@ from .policy_store import PolicyStore
 from .reaper import Reaper
 from .runtime.base import Runtime
 from .spec_cache import SpecService
+from .staging import UploadStaging
 
 
 @dataclass
@@ -31,6 +32,7 @@ class Services:
     specs: SpecService
     manager: SandboxManager
     reaper: Reaper
+    staging: UploadStaging | None = None  # ORCH_STAGE_UPLOADS
     _background: set[asyncio.Task] = field(default_factory=set)
 
     def spawn(self, coro: Coroutine) -> asyncio.Task:
@@ -53,8 +55,16 @@ class Services:
         policies = PolicyStore(settings, db, runtime, secrets)
         specs = SpecService(settings, db, runtime, policies, http)
         manager = SandboxManager(settings, db, runtime, policies, secrets, http)
-        reaper = Reaper(manager, settings.reaper_interval_seconds)
-        return cls(settings, db, runtime, secrets, http, proxy_http, policies, specs, manager, reaper)
+        staging = None
+        if settings.stage_uploads:
+            staging = UploadStaging(
+                settings.staging_dir,
+                ttl_minutes=settings.staging_ttl_minutes,
+                max_file_bytes=settings.staging_max_file_mb * 1024 * 1024,
+                max_user_bytes=settings.staging_max_user_mb * 1024 * 1024,
+            )
+        reaper = Reaper(manager, settings.reaper_interval_seconds, staging)
+        return cls(settings, db, runtime, secrets, http, proxy_http, policies, specs, manager, reaper, staging)
 
     async def close(self) -> None:
         for task in list(self._background):

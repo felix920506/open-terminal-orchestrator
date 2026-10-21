@@ -17,6 +17,7 @@ import httpx
 import websockets
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from websockets.asyncio.client import connect as ws_connect
 
 from ..auth import identify_gateway_caller, require_gateway
@@ -25,6 +26,7 @@ from ..policies import EffectivePolicy
 from ..policy_store import PolicyError
 from ..services import Services, services, ws_services
 from ..spec_cache import TOOL_PREFIX
+from ..staging import StagingError
 
 log = logging.getLogger(__name__)
 
@@ -113,6 +115,32 @@ async def _static(svc: Services, policy_id: str, path: str) -> Response:
     return JSONResponse(svc.specs.system(entry, policy))
 
 
+async def _hold_upload(svc: Services, request: Request, policy: EffectivePolicy, user_id: str) -> Response:
+    """Keep a file attached before its chat exists; the uploads filter delivers it later."""
+    home = svc.specs.initial_cwd(await svc.specs.ensure(policy), policy)
+    root = posixpath.normpath(home.get("home") or home["cwd"])
+    directory = posixpath.normpath(request.query_params.get("directory") or root)
+    if not directory.startswith("/") or (directory != root and not directory.startswith(root.rstrip("/") + "/")):
+        raise HTTPException(status_code=400, detail=f"Before the chat starts, files can only be uploaded under {root}")
+    limit = svc.settings.staging_max_file_mb * 1024 * 1024
+    if int(request.headers.get("content-length") or 0) > limit + 64 * 1024:
+        raise HTTPException(status_code=413, detail=HOLD_TOO_LARGE)
+    form = await request.form(max_files=1, max_fields=10)
+    try:
+        file = form.get("file")
+        if not isinstance(file, StarletteUploadFile):
+            raise HTTPException(status_code=400, detail="Expected a multipart 'file' field")
+        item = await svc.staging.put(user_id, policy.id, directory, file.filename or "upload", file.file)
+    except StagingError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e)) from e
+    finally:
+        await form.close()
+    return JSONResponse({"path": item.path, "size": item.size})
+
+
+HOLD_TOO_LARGE = "File is too large to attach before the chat starts. Send a message first, then upload it."
+
+
 # ── orchestrator tools ─────────────────────────────────────────────────────
 
 
@@ -172,13 +200,17 @@ async def _proxy(svc: Services, request: Request, policy_id: str, path: str) -> 
         return await _tool(svc, request, policy, user_id, path.split("/", 1)[1])
 
     if (
-        request.method == "GET"
-        and path in CONTEXTLESS_EMPTY
-        and not request.headers.get(CONTEXT_HEADER)
+        not request.headers.get(CONTEXT_HEADER)
         and not request.headers.get("x-session-id")  # with a chat id, the connection is misconfigured
         and policy.lifecycle.contextless != "per_user"
     ):
-        return JSONResponse(CONTEXTLESS_EMPTY[path])
+        # No chat yet: Open WebUI's new-chat page.
+        if svc.staging and request.method == "GET" and path == "files/cwd":
+            return JSONResponse(svc.specs.initial_cwd(await svc.specs.ensure(policy), policy))
+        if svc.staging and request.method == "POST" and path == "files/upload":
+            return await _hold_upload(svc, request, policy, user_id)
+        if request.method == "GET" and path in CONTEXTLESS_EMPTY:
+            return JSONResponse(CONTEXTLESS_EMPTY[path])
 
     ctx = _context_id(request.headers, policy, user_id)
     session_id = request.headers.get("x-session-id") or None
