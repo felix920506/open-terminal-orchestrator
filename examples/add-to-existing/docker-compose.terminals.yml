@@ -15,7 +15,7 @@ services:
     networks: [default, terminals]
 
   orchestrator:
-    image: ghcr.io/felix920506/open-terminal-orchestrator:${OTO_VERSION:-0.1.2}
+    image: ghcr.io/felix920506/open-terminal-orchestrator:${OTO_VERSION:-0.1.3}
     # Fixed name: the orchestrator attaches itself to each sandbox's private network.
     container_name: oto-orchestrator
     restart: unless-stopped
