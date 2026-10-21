@@ -56,7 +56,7 @@ To make the terminal the default, edit a model in **Admin Settings → Models** 
 
 | Variable | Default | |
 |---|---|---|
-| `SANDBOX_IMAGE` | `ghcr.io/open-webui/open-terminal:latest` | Use `ghcr.io/felix920506/open-terminal-scientific:latest` for the full scientific Python and Excel stack |
+| `SANDBOX_IMAGE` | `ghcr.io/open-webui/open-terminal:latest` | Use `ghcr.io/felix920506/open-terminal-scientific:latest` for scientific Python, image processing and Excel, PDF, Word and PowerPoint handling ([contents](../../README.md#sandbox-images)) |
 | `OPEN_WEBUI_PORT` | `3000` | Host port for Open WebUI |
 | `MAX_RUNNING_SANDBOXES` | `20` | Running sandboxes at once; the least recently used one is stopped beyond this |
 | `OPEN_WEBUI_IMAGE` | `ghcr.io/open-webui/open-webui:v0.12.2` | Tested with 0.11.1, 0.11.4 and 0.12.2 |

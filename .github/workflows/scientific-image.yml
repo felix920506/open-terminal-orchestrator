@@ -66,17 +66,8 @@ jobs:
           tags: open-terminal-scientific:ci
       - name: Smoke test
         run: |
-          docker run --rm --entrypoint python3 open-terminal-scientific:ci -c "
-          import numpy, scipy, pandas, sklearn, statsmodels, sympy, polars, xarray, h5py, formulas
-          import pandas as pd
-          df = pd.DataFrame({'a': [1, 2, 3]})
-          for path, engine in [('/tmp/t.xlsx', 'xlsxwriter'), ('/tmp/t.ods', 'odf')]:
-              df.to_excel(path, index=False, engine=engine)
-              assert pd.read_excel(path).equals(df), path
-          assert pd.read_excel('/tmp/t.xlsx', engine='calamine').equals(df)
-          assert polars.read_excel('/tmp/t.xlsx').shape == (3, 1)
-          print('ok')
-          "
+          docker run --rm -v "$PWD/images/scientific/smoke_test.py:/tmp/smoke_test.py:ro" \
+            --entrypoint python3 open-terminal-scientific:ci /tmp/smoke_test.py
       - id: push
         name: Push by digest
         if: github.event_name != 'pull_request'

@@ -112,12 +112,22 @@ under exactly the name the policy uses (`docker load` keeps the name it was save
 
 The slim image ships almost no Python libraries. The full image (`:latest`, ~6 GB) includes
 numpy, scipy, pandas, matplotlib, seaborn, plotly, scikit-learn, Jupyter, openpyxl, xlrd,
-xlsxwriter and LibreOffice. `images/scientific` extends it with:
+xlsxwriter, pypdf, python-docx, python-pptx, Pillow, pandoc, ImageMagick, ffmpeg and
+LibreOffice. `images/scientific` (~8 GB) extends it with:
 - **Scientific:** sympy, statsmodels, networkx, scikit-image, numba, polars, pyarrow, xarray,
   netCDF4, h5py, PyTables, bokeh and altair.
 - **Excel:** every pandas Excel engine (calamine, pyxlsb for `.xlsb`, odfpy for `.ods`),
   fastexcel for polars, `formulas` to evaluate workbook formulas, and msoffcrypto-tool for
   password-protected files.
+- **PDF:** PyMuPDF (text, images, rendering), pdfplumber (layout and tables), pikepdf
+  (merge, split, encrypt), pdf2image, reportlab and fpdf2 (generation), img2pdf, and OCR for
+  scanned documents with tesseract, pytesseract and ocrmypdf.
+- **Word and PowerPoint:** mammoth (`.docx` to HTML/Markdown), docx2python, docxtpl
+  (templates), docxcompose (merging) and pypandoc, on top of python-docx and python-pptx.
+  LibreOffice in the base converts legacy `.doc`/`.ppt` and renders to PDF.
+- **Any document to Markdown:** markitdown (PDF, Word, PowerPoint, Excel).
+- **Images:** OpenCV (headless), imageio with ffmpeg, tifffile, HEIC/AVIF support for Pillow,
+  Wand (ImageMagick) and cairosvg.
 
 It is published as `ghcr.io/felix920506/open-terminal-scientific`, rebuilt weekly so upstream
 Open Terminal releases are picked up. Tags are `latest`, `YYYYMMDD` (weekly builds) and

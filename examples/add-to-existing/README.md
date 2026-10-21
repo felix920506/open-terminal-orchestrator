@@ -51,7 +51,7 @@ Optional settings for `.env`:
 
 | Variable | Default | |
 |---|---|---|
-| `SANDBOX_IMAGE` | `ghcr.io/open-webui/open-terminal:latest` | `ghcr.io/felix920506/open-terminal-scientific:latest` adds the full scientific Python and Excel stack |
+| `SANDBOX_IMAGE` | `ghcr.io/open-webui/open-terminal:latest` | `ghcr.io/felix920506/open-terminal-scientific:latest` adds scientific Python, image processing and Excel, PDF, Word and PowerPoint handling ([contents](../../README.md#sandbox-images)) |
 | `MAX_RUNNING_SANDBOXES` | `20` | Sandboxes running at once |
 | `OTO_VERSION` | `0.1.2` | Orchestrator image tag |
 
