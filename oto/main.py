@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import secrets
 from contextlib import asynccontextmanager
 
@@ -23,6 +24,14 @@ from .runtime.base import Runtime
 from .services import Services, services
 
 log = logging.getLogger("oto")
+
+# .env names used by the Compose examples, which map them onto the orchestrator's settings.
+# Setting them on the container directly does nothing, so warn about it.
+COMPOSE_ENV_NAMES = {
+    "STAGE_UPLOADS": "ORCH_STAGE_UPLOADS",
+    "SANDBOX_IMAGE": "ORCH_DEFAULT_IMAGE",
+    "MAX_RUNNING_SANDBOXES": "ORCH_MAX_RUNNING_GLOBAL",
+}
 
 
 def create_app(
@@ -50,6 +59,15 @@ def create_app(
             log.info("Allowlist (%s): %s", allowlist.name, ", ".join(allowlist.describe()))
         if not clients:
             log.warning("ORCH_ALLOWED_CLIENTS is not set; any host that can reach this port may call it")
+        for name, setting in COMPOSE_ENV_NAMES.items():
+            if name in os.environ and setting not in os.environ:
+                log.warning(
+                    "%s is set in the orchestrator's environment but has no effect; the orchestrator reads %s. "
+                    "(%s is the name for the .env file next to the Compose examples.)",
+                    name,
+                    setting,
+                    name,
+                )
         dns_task = asyncio.create_task(refresh_allowlists()) if any(a.hostnames for a in allowlists) else None
         if not settings.api_key:
             settings.api_key = secrets.token_urlsafe(32)

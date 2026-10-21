@@ -139,3 +139,13 @@ def test_no_chat_409_is_explained_and_logged(client, caplog):
     assert "'x-user-id': 'u1'" in line
     assert "<redacted: connection key>" in line and KEY not in line
     assert "held_uploads=off (ORCH_STAGE_UPLOADS)" in line
+
+
+def test_env_name_without_prefix_warns(make_client, monkeypatch, caplog):
+    monkeypatch.setenv("STAGE_UPLOADS", "true")
+    monkeypatch.delenv("ORCH_STAGE_UPLOADS", raising=False)
+    caplog.set_level("WARNING", logger="oto")
+    make_client()
+    assert any(
+        "STAGE_UPLOADS is set" in r.getMessage() and "ORCH_STAGE_UPLOADS" in r.getMessage() for r in caplog.records
+    )
