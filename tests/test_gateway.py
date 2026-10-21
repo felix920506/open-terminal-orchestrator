@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import json
+import time
+
 import jwt
+import pytest
+from starlette.websockets import WebSocketDisconnect
+
+from oto.api import gateway
 
 from .conftest import ADMIN_H, CONN_H, IMAGE, KEY, chat_headers, put_policy
 
@@ -40,9 +47,34 @@ def test_static_spec_served_without_sandbox(client, runtime):
 def test_context_required(client):
     h = chat_headers("a")
     del h["X-Terminal-Context-Id"]
-    r = client.get("/p/dev/files/cwd", headers=h)
+    r = client.get("/p/dev/files/read", params={"path": "/f"}, headers=h)
     assert r.status_code == 409
-    assert "chat_id" in r.json()["detail"]
+    assert "'Per chat'" in r.json()["detail"]
+    r = client.post("/p/dev/files/write", json={"path": "/f", "content": "1"}, headers=h)
+    assert r.status_code == 409
+
+
+def test_shared_chat_context_is_reported(client, caplog, monkeypatch):
+    monkeypatch.setattr(gateway, "_warned_shared", False)
+    # Connection left on "Shared": Open WebUI sends the chat id but no context header.
+    h = chat_headers("a")
+    del h["X-Terminal-Context-Id"]
+    assert client.get("/p/dev/ports", headers=h).status_code == 409
+    assert client.get("/p/dev/files/cwd", headers=h).status_code == 409
+    assert "Per chat" in caplog.text
+    assert sandboxes(client) == []
+
+
+def test_unsaved_chat_ui_reads_are_empty(client, runtime):
+    # Open WebUI's skills menu, file browser and port poller run before a chat is saved.
+    h = {"Authorization": f"Bearer {KEY}", "X-User-Id": "u1"}
+    assert client.get("/p/dev/skills", headers=h).json() == []
+    assert client.get("/p/dev/ports", headers=h).json() == {"ports": []}
+    assert client.get("/p/dev/files/cwd", headers=h).json() == {"cwd": None}
+    r = client.get("/p/dev/files/list", params={"directory": "/home/user"}, headers=h)
+    assert r.status_code == 200 and r.json() == {"entries": [], "writable": False}
+    assert runtime.containers == {}
+    assert sandboxes(client) == []
 
 
 def test_per_user_contextless(client):
@@ -266,3 +298,26 @@ def test_concurrent_cold_requests_create_one_sandbox(client, runtime):
     assert codes == [200] * 10
     assert len(runtime.containers) == 1
     assert len([c for c in runtime.calls if c.startswith("create oto-sbx-")]) == 1
+
+
+def test_ws_user_from_query_for_older_open_webui(client):
+    # Open WebUI < 0.11.4 sends the user only as ?user_id= on the terminal WebSocket.
+    h = {"X-Terminal-Context-Id": "chat:a"}
+    with client.websocket_connect("/p/dev/api/terminals/s1?user_id=u7", headers=h) as ws:
+        ws.send_text(json.dumps({"type": "auth", "token": KEY}))
+        for _ in range(100):  # the fake runtime has no WebSocket upstream; stop once it's routed
+            if sandboxes(client):
+                break
+            time.sleep(0.02)
+        ws.close()
+    (box,) = sandboxes(client)
+    assert box["context_id"] == "chat:a" and box["owner_user_id"] == "u7"
+
+
+def test_ws_without_user_is_refused(client):
+    with client.websocket_connect("/p/dev/api/terminals/s1", headers={"X-Terminal-Context-Id": "chat:a"}) as ws:
+        ws.send_text(json.dumps({"type": "auth", "token": KEY}))
+        with pytest.raises(WebSocketDisconnect) as e:
+            ws.receive_text()
+    assert e.value.code == 4001
+    assert sandboxes(client) == []

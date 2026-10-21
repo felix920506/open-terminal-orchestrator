@@ -48,6 +48,15 @@ STRIP_REQUEST = HOP_BY_HOP | {"host", "authorization", CONTEXT_HEADER, "cookie",
 STRIP_RESPONSE = HOP_BY_HOP | {"server", "date"}
 
 STATIC_PATHS = {"openapi.json", "api/config", "system"}
+# Reads the Open WebUI UI makes before a chat is saved (and so before it has a context): the
+# skills menu, file browser and port list. Answered as "nothing there yet" rather than 409, so
+# a new chat doesn't produce a stream of errors (the port list polls every few seconds).
+CONTEXTLESS_EMPTY = {
+    "skills": [],
+    "ports": {"ports": []},
+    "files/cwd": {"cwd": None},
+    "files/list": {"entries": [], "writable": False},
+}
 MAX_REPLAYABLE_BODY = 8 * 1024 * 1024
 RESERVED_ROOT_PREFIXES = ("api/v1/", "healthz", "metrics")
 
@@ -73,13 +82,25 @@ def _context_id(request_headers, policy: EffectivePolicy, user_id: str) -> str:
         return ctx
     if policy.lifecycle.contextless == "per_user" and user_id and user_id != "system":
         return f"user:{user_id}"
-    raise HTTPException(
-        status_code=409,
-        detail=(
-            "This terminal needs a conversation context. In Open WebUI set the connection's chat "
-            "context to 'chat_id' and use a saved (non-temporary) chat."
-        ),
-    )
+    if request_headers.get("x-session-id"):
+        # A chat is known but Open WebUI sent no context: the connection is on "Shared".
+        _warn_shared_context()
+    raise HTTPException(status_code=409, detail=CONTEXT_REQUIRED)
+
+
+CONTEXT_REQUIRED = (
+    "This terminal needs a per-chat context. In Open WebUI, edit the connection under Admin Settings → "
+    "Integrations → Open Terminal, expand 'Orchestrator' and set Terminal Contexts → Chat to 'Per chat'. "
+    "Temporary chats cannot use it."
+)
+_warned_shared = False
+
+
+def _warn_shared_context() -> None:
+    global _warned_shared
+    if not _warned_shared:
+        _warned_shared = True
+        log.warning("Open WebUI is calling without a chat context, so every chat request fails. %s", CONTEXT_REQUIRED)
 
 
 async def _static(svc: Services, policy_id: str, path: str) -> Response:
@@ -149,6 +170,15 @@ async def _proxy(svc: Services, request: Request, policy_id: str, path: str) -> 
 
     if path.startswith(TOOL_PREFIX.lstrip("/") + "/"):
         return await _tool(svc, request, policy, user_id, path.split("/", 1)[1])
+
+    if (
+        request.method == "GET"
+        and path in CONTEXTLESS_EMPTY
+        and not request.headers.get(CONTEXT_HEADER)
+        and not request.headers.get("x-session-id")  # with a chat id, the connection is misconfigured
+        and policy.lifecycle.contextless != "per_user"
+    ):
+        return JSONResponse(CONTEXTLESS_EMPTY[path])
 
     ctx = _context_id(request.headers, policy, user_id)
     session_id = request.headers.get("x-session-id") or None
@@ -238,7 +268,9 @@ async def _ws_proxy(svc: Services, ws: WebSocket, policy_id: str, session_id: st
     except Exception:
         return
 
-    user_id = identify_gateway_caller(svc.settings, str(payload.get("token") or ""), ws.headers.get("x-user-id"))
+    # Open WebUI before 0.11.4 passes the user only as a query parameter on the WebSocket.
+    header_user_id = ws.headers.get("x-user-id") or ws.query_params.get("user_id")
+    user_id = identify_gateway_caller(svc.settings, str(payload.get("token") or ""), header_user_id)
     if not user_id or user_id == "system":
         await ws.close(code=4001, reason="Invalid credentials")
         return
@@ -247,6 +279,10 @@ async def _ws_proxy(svc: Services, ws: WebSocket, policy_id: str, session_id: st
     try:
         policy = await svc.policies.effective(policy_id)
         ctx = _context_id(ws.headers, policy, user_id)
+        if not chat_session and ctx.startswith("chat:"):
+            # Open WebUI before 0.11.4 sends no chat id on the WebSocket; Open Terminal needs it
+            # to find the session, which was created over HTTP with X-Session-Id.
+            chat_session = ctx.removeprefix("chat:")
         ep = await svc.manager.acquire(policy.id, ctx, user_id, chat_session)
     except HTTPException as e:
         await ws.close(code=4003, reason=str(e.detail)[:120])
