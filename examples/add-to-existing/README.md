@@ -54,7 +54,7 @@ Optional settings for `.env`:
 | `SANDBOX_IMAGE` | `ghcr.io/open-webui/open-terminal:latest` | `ghcr.io/felix920506/open-terminal-scientific:latest` adds scientific Python, image processing and Excel, PDF, Word and PowerPoint handling ([contents](../../README.md#sandbox-images)) |
 | `MAX_RUNNING_SANDBOXES` | `20` | Sandboxes running at once |
 | `STAGE_UPLOADS` | `false` | Hold files attached before a chat's first message; needs a filter function, see [attaching files before the first message](../open-webui/README.md#optional-attach-files-before-the-first-message) |
-| `OTO_VERSION` | `0.1.4` | Orchestrator image tag |
+| `OTO_VERSION` | `0.1.5` | Orchestrator image tag |
 
 To change `SANDBOX_IMAGE` later, see [changing the sandbox image](../open-webui/README.md#changing-the-sandbox-image).
 
@@ -179,7 +179,7 @@ docker volume rm "${p}_orchestrator-data"
 ## Open WebUI not in Compose?
 
 Run the orchestrator on its own with [`deploy/docker-compose.yml`](../../deploy/docker-compose.yml),
-using `OTO_IMAGE=ghcr.io/felix920506/open-terminal-orchestrator:0.1.4` and `--no-build`. Then
+using `OTO_IMAGE=ghcr.io/felix920506/open-terminal-orchestrator:0.1.5` and `--no-build`. Then
 connect as in step 4.
 - **Open WebUI started with `docker run` on the same host:** set `OTO_WEBUI_NETWORK` to a
   Docker network Open WebUI is attached to, and `ORCH_ALLOWED_CLIENTS` to its container name.

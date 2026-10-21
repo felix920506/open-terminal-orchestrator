@@ -61,7 +61,7 @@ To make the terminal the default, edit a model in **Admin Settings → Models** 
 | `MAX_RUNNING_SANDBOXES` | `20` | Running sandboxes at once; the least recently used one is stopped beyond this |
 | `STAGE_UPLOADS` | `false` | Hold files attached before a chat's first message; see [below](#optional-attach-files-before-the-first-message) |
 | `OPEN_WEBUI_IMAGE` | `ghcr.io/open-webui/open-webui:v0.12.2` | Tested with 0.11.1, 0.11.4 and 0.12.2 |
-| `OTO_IMAGE` | `ghcr.io/felix920506/open-terminal-orchestrator:0.1.4` | |
+| `OTO_IMAGE` | `ghcr.io/felix920506/open-terminal-orchestrator:0.1.5` | |
 
 The terminal connection in `TERMINAL_SERVER_CONNECTIONS` is applied only on Open WebUI's first
 start. After that, edit it under **Admin Settings → Integrations → Open Terminal**. If you change
