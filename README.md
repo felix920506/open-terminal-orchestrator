@@ -24,9 +24,9 @@ v0.1, a first version for testing.
   - a stopped container resumes in about 1.7 s
   - an `egress: none` sandbox has no network access
   - one sandbox cannot reach another
-- **Verified end to end against Open WebUI v0.11.1, v0.11.4 and v0.12.2** (32/32 checks in
-  `scripts/e2e_openwebui.py`, using `openai/gpt-4.1-nano` through OpenRouter). The checks
-  cover:
+- **Verified end to end against Open WebUI v0.11.1, v0.11.4, v0.12.2 and v0.12.3** (32/32
+  checks in `scripts/e2e_openwebui.py`, using `openai/gpt-4.1-nano` through OpenRouter, plus 7
+  more with `--held-uploads` on 0.11.1, 0.11.4 and 0.12.3). The checks cover:
   - orchestrator detection, and policy and lifecycle editing through Open WebUI
   - model tool calls that land in a per-chat sandbox
   - chat-to-chat isolation, and the file sidebar
@@ -35,6 +35,8 @@ v0.1, a first version for testing.
   - stop and resume, and admin "Refresh Terminals"
   - the model calling `reset_sandbox`
   - chat deletion destroying the sandbox (through the event function)
+  - with `--held-uploads`: a file attached before a new chat's first message reaching that
+    chat's sandbox before the model runs (through the uploads filter)
 
 ## Quick start (development, orchestrator on the host)
 
@@ -159,6 +161,9 @@ as `ORCH_DEFAULT_IMAGE`. For airgapped hosts, `docker save` it like the images a
 4. Optional: paste the functions from `integrations/owui/` into **Admin → Functions**:
    - `event_chat_cleanup.py` destroys a chat's sandbox when the chat is deleted.
    - `action_reset_terminal.py` adds a "Reset terminal" button to messages.
+   - `filter_terminal_uploads.py` delivers files attached before a chat's first message
+     (needs `ORCH_STAGE_UPLOADS=true`; install it as a **Global** filter). See
+     [attaching files before the first message](examples/open-webui/README.md#optional-attach-files-before-the-first-message).
 
    Set their valves to the orchestrator URL and `ORCH_ADMIN_API_KEY`.
 
@@ -222,6 +227,9 @@ ORCH_ADMIN_ALLOWED_CLIENTS=open-webui,10.0.5.0/24  # optional: who may manage sa
 | `ORCH_DEFAULT_IMAGE` / `ORCH_DEFAULT_POLICY_ID` | – / `default` | Creates the default policy at startup and keeps its image in step with this value on every restart, unless the image was since changed through the policy API (e.g. in Open WebUI). The image is always allowed, whatever `ORCH_IMAGE_ALLOWLIST` says. Unknown policy IDs fall back to the default policy. |
 | `ORCH_MAX_RUNNING_GLOBAL` | `50` | Hot sandbox cap. The least recently used idle sandbox is stopped when it is reached. |
 | `ORCH_REAPER_INTERVAL_SECONDS` | `30` | |
+| `ORCH_STAGE_UPLOADS` | `false` | Hold uploads made before a chat exists (Open WebUI's new-chat page) until the `filter_terminal_uploads.py` filter delivers them. Enable only with that filter installed. |
+| `ORCH_STAGING_DIR` | `/data/staging` in the image | Where held uploads are kept |
+| `ORCH_STAGING_TTL_MINUTES` / `ORCH_STAGING_MAX_FILE_MB` / `ORCH_STAGING_MAX_USER_MB` | `60` / `200` / `1000` | Held uploads are deleted after this long; size caps per file and per user |
 
 ### Policy (Open WebUI policy form)
 
@@ -279,10 +287,12 @@ it by hand. A run costs well under $0.01 with `gpt-4.1-nano`.
 
 ## Known limitations
 
-- **Tested against Open WebUI v0.11.1, v0.11.4 and v0.12.2 only.** The orchestrator protocol is
+- **Tested against Open WebUI v0.11.1, v0.11.4, v0.12.2 and v0.12.3 only.** The orchestrator protocol is
   undocumented on Open WebUI's side. Rerun `scripts/e2e_openwebui.py` when upgrading Open WebUI.
   The two versions differ only in how the browser names the chat (`X-Session-Id` header in
   0.11, a `/chats/{id}/` URL segment in 0.12), and both reach the orchestrator the same way.
+- **Open WebUI uploads files attached on a new chat before the chat exists.** With per-chat
+  sandboxes they fail unless `ORCH_STAGE_UPLOADS` and the uploads filter are set up.
 - Small models sometimes call `run_command` without `wait` (or with `wait: "10s"`, which gets
   a 422) and answer before the output arrives. This is model behaviour, not an orchestrator
   issue.

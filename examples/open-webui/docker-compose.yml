@@ -52,6 +52,8 @@ services:
       ORCH_DEFAULT_IMAGE: ${SANDBOX_IMAGE:-ghcr.io/open-webui/open-terminal:latest}
       ORCH_IMAGE_ALLOWLIST: ghcr.io/open-webui/open-terminal*,ghcr.io/felix920506/open-terminal-scientific*
       ORCH_MAX_RUNNING_GLOBAL: ${MAX_RUNNING_SANDBOXES:-20}
+      # Hold files attached before a chat's first message; needs the "Terminal uploads" filter.
+      ORCH_STAGE_UPLOADS: ${STAGE_UPLOADS:-false}
       # Only Open WebUI (and `docker exec … oto` inside this container) may call the orchestrator.
       ORCH_ALLOWED_CLIENTS: open-webui,127.0.0.1
     volumes:
