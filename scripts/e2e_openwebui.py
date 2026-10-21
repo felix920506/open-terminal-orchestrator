@@ -87,7 +87,7 @@ class Chat:
             mid = m["parentId"]
         return list(reversed(out))
 
-    def send(self, prompt: str, timeout: float = 180) -> dict:
+    def send(self, prompt: str, timeout: float = 180, files: list[dict] | None = None) -> dict:
         uid, aid = str(uuid.uuid4()), str(uuid.uuid4())
         now = int(time.time())
         # Start from the stored history so earlier turns keep their recorded tool calls.
@@ -103,6 +103,7 @@ class Chat:
             "content": prompt,
             "timestamp": now,
             "models": [self.model],
+            **({"files": files} if files else {}),
         }
         self.messages[aid] = {
             "id": aid,
@@ -197,6 +198,55 @@ async def ws_terminal(args, ui: OWUI, chat_id: str) -> str:
         return out.decode(errors="replace")
 
 
+def held_uploads(args, admin: OWUI, bob: OWUI) -> None:
+    """A file attached on a new chat before its first message (ORCH_STAGE_UPLOADS + uploads filter)."""
+    code = (Path(__file__).resolve().parent.parent / "integrations/owui/filter_terminal_uploads.py").read_text()
+    admin.req("DELETE", "/api/v1/functions/id/oto_uploads/delete")
+    r = admin.req(
+        "POST",
+        "/api/v1/functions/create",
+        json={"id": "oto_uploads", "name": "Terminal uploads", "content": code, "meta": {"description": "e2e"}},
+    )
+    if not check("uploads filter installed", r.status_code == 200, r.text[:200]):
+        return
+    admin.req(
+        "POST",
+        "/api/v1/functions/id/oto_uploads/valves/update",
+        json={"orchestrator_url": args.orch_internal_url, "admin_api_key": args.orch_admin_key},
+    )
+    state = admin.req("GET", "/api/v1/functions/id/oto_uploads").json()
+    if not state.get("is_active"):
+        admin.req("POST", "/api/v1/functions/id/oto_uploads/toggle")
+    if not state.get("is_global"):
+        admin.req("POST", "/api/v1/functions/id/oto_uploads/toggle/global")
+
+    # The browser on a new chat page: no chat id on either call.
+    base = f"/api/v1/terminals/{args.terminal_id}"
+    cwd = bob.req("GET", f"{base}/files/cwd").json().get("cwd")
+    check("new chat: cwd is the sandbox home", cwd == "/home/user", str(cwd))
+    marker = f"held-{uuid.uuid4().hex[:8]}"
+    r = bob.req(
+        "POST", f"{base}/files/upload", params={"directory": cwd}, files={"file": ("notes.txt", marker.encode())}
+    )
+    check("new chat: upload accepted before the chat exists", r.status_code == 200, r.text[:200])
+    path = r.json().get("path") if r.status_code == 200 else None
+    check("new chat: upload reports its sandbox path", path == "/home/user/notes.txt", str(path))
+    if not path:
+        return
+
+    # Sending the first message saves the chat with the attachment, then runs the filter.
+    chat = Chat(bob, args.model, args.terminal_id, "e2e held upload")
+    attachment = {"type": "filesystem", "id": path, "path": path, "url": path, "name": "notes.txt", "size": len(marker)}
+    msg = chat.send(
+        "Use the terminal to run exactly this command and tell me its output: cat ~/notes.txt", files=[attachment]
+    )
+    r = bob.terminal("GET", args.terminal_id, chat.id, "files/read", params={"path": path})
+    check("held upload delivered into the new chat's sandbox", marker in r.text, r.text[:200])
+    check("model read the held upload", marker in outputs_text(msg), "(model-dependent) " + outputs_text(msg)[:160])
+    box = sandbox_for(args, chat.id)
+    check("held upload's sandbox belongs to the uploader", bool(box) and box["owner_user_id"] == bob.user["id"])
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--owui-url", default="http://127.0.0.1:13000")
@@ -207,6 +257,7 @@ def main() -> int:
     p.add_argument("--terminal-id", default="oto")
     p.add_argument("--policy-id", default="default")
     p.add_argument("--model", default="openai/gpt-4.1-nano")
+    p.add_argument("--held-uploads", action="store_true", help="test uploads before a chat exists (ORCH_STAGE_UPLOADS)")
     args = p.parse_args()
 
     admin = OWUI(args.owui_url)
@@ -468,6 +519,9 @@ def main() -> int:
                 break
             time.sleep(0.5)
         check("deleting chat B destroys its sandbox", gone)
+
+    if args.held_uploads:
+        held_uploads(args, admin, bob)
 
     failed = [n for n, ok, _ in RESULTS if not ok]
     print(f"\n{len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed")
