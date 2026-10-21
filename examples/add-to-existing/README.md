@@ -47,7 +47,9 @@ With `COMPOSE_FILE` set, plain `docker compose` commands include the terminal se
 Without it, pass both files every time:
 `docker compose -f docker-compose.yml -f docker-compose.terminals.yml …`.
 
-Optional settings for `.env`:
+Optional settings for `.env`. These are `.env` names: `docker-compose.terminals.yml` maps them onto
+the orchestrator's `ORCH_*` variables. In a container's `environment:` they do nothing, so use
+the `ORCH_*` names there (for example `ORCH_STAGE_UPLOADS`).
 
 | Variable | Default | |
 |---|---|---|

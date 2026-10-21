@@ -54,6 +54,11 @@ To make the terminal the default, edit a model in **Admin Settings → Models** 
 
 ## Options (`.env`)
 
+These names are for the `.env` file next to `docker-compose.yml`. The compose file maps them
+onto the orchestrator's `ORCH_*` variables (for example `STAGE_UPLOADS` → `ORCH_STAGE_UPLOADS`).
+If you set options directly in a container's `environment:`, use the `ORCH_*` names from the
+[main README](../../README.md#configuration).
+
 | Variable | Default | |
 |---|---|---|
 | `SANDBOX_IMAGE` | `ghcr.io/open-webui/open-terminal:latest` | Use `ghcr.io/felix920506/open-terminal-scientific:latest` for scientific Python, image processing and Excel, PDF, Word and PowerPoint handling ([contents](../../README.md#sandbox-images)) |
@@ -114,6 +119,11 @@ To make attaching before the first message work:
    ```yaml
          ORCH_STAGE_UPLOADS: ${STAGE_UPLOADS:-false}
    ```
+
+   Mind the two names. `STAGE_UPLOADS` goes in `.env`, and the line above copies it into
+   `ORCH_STAGE_UPLOADS`, the variable the orchestrator actually reads. If you set it directly
+   in the container's `environment:` instead of in `.env`, use `ORCH_STAGE_UPLOADS: "true"`.
+   `STAGE_UPLOADS` there does nothing (the orchestrator logs a warning saying so).
 
    Then confirm it's on:
 
