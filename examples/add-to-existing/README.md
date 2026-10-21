@@ -1,7 +1,7 @@
 # Add terminals to an existing Open WebUI
 
 This adds per-chat terminal sandboxes to an Open WebUI you already run with Docker Compose.
-Your existing data, users and settings are kept. Tested with Open WebUI 0.11.4 and 0.12.2.
+Your existing data, users and settings are kept. Tested with Open WebUI 0.11.1, 0.11.4 and 0.12.2.
 
 Starting from scratch instead? Use [`examples/open-webui`](../open-webui), which needs no setup
 in the UI.
@@ -75,20 +75,50 @@ Open WebUI keeps its settings in its database, so an existing install has to be 
 terminal once. (The `TERMINAL_SERVER_CONNECTIONS` variable used by the fresh-install example is
 read only when Open WebUI starts with an empty database.)
 
-In Open WebUI, go to **Admin Settings → Integrations → Open Terminal** and add a connection:
+> [!WARNING]
+> **There are three places in Open WebUI that accept this URL, and only one is right.** Use
+> **Admin Settings → Integrations → Open Terminal**.
+>
+> | Place | What it creates | Works? |
+> |---|---|---|
+> | **Admin Settings** → Integrations → **Open Terminal** | A **System** terminal: Open WebUI's server talks to the orchestrator and sends the chat ID | **Yes** |
+> | **Admin Settings** → Integrations → **External Tool Servers** | A generic OpenAPI tool server, with no idea of chats | No |
+> | Your personal **Settings** (profile menu) → Integrations → **Open Terminal** | A **Direct** terminal: your browser calls the URL itself | No. The browser can't reach `oto-orchestrator`, and no chat ID is sent |
+>
+> The admin and personal pages look almost identical. Check that you are under **Admin
+> Settings** before adding the connection.
 
-| Field | Value |
-|---|---|
-| URL | `http://oto-orchestrator:8080` |
-| Key | the `ORCH_API_KEY` value from `.env` |
-| Policy ID | `default` |
-| Chat context | per chat (`chat_id`). This gives each chat its own sandbox. |
+1. Under **Open Terminal**, click **+** and fill in:
 
-1. Click **Verify**. It should report **Orchestrator**.
-2. Open the policy and check the image, CPU, memory, storage and idle timeout. Setting a
+   | Field | Value |
+   |---|---|
+   | URL | `http://oto-orchestrator:8080` |
+   | API Key | the `ORCH_API_KEY` value from `.env` |
+
+2. **Click the verify button** (the icon at the end of the URL field, tooltip "Verify
+   Connection"). It should say **Connected (Orchestrator)**. You must do this: the
+   **Orchestrator** section in the next step only appears after a successful verify, and it
+   starts collapsed.
+3. Expand **Orchestrator** and set:
+
+   | Field | Value |
+   |---|---|
+   | Terminal Contexts → Chat | **Per chat**. The default, **Shared**, does not work with this orchestrator: every chat request fails with HTTP 409. |
+   | Policy ID | `default` |
+
+   The policy's image, CPU, memory, storage and idle timeout load below it. Setting a
    different image here overrides `SANDBOX_IMAGE` from then on.
-3. Save. By default only admins can use the connection, so grant access to users or groups
-   if you want others to use it.
+4. By default only admins can use the connection. Use the access button to grant it to users
+   or groups, then **Save**.
+
+To check an existing connection, edit it, click verify, and expand **Orchestrator**: Chat must
+say **Per chat**.
+
+In a chat, the terminal menu lists admin connections under **System** and personal ones under
+**Direct**. Always pick the one under **System**. If the orchestrator also shows up under
+**Direct**, someone added it in their personal settings: delete it in their **Settings →
+Integrations → Open Terminal**. To stop users from adding their own, turn off **Direct Tool
+Servers** under **Admin Panel → Users → Groups → Default permissions**.
 
 <details>
 <summary>Or register it from the command line</summary>
@@ -114,7 +144,8 @@ curl -fsS "$OWUI/api/v1/configs/terminal_servers" -H "Authorization: Bearer $TOK
 
 ## 5. Use it
 
-In a chat, pick **Terminal** in the input bar. The model can now run commands, and the file
+In a chat, pick **Terminal** from the **System** group of the terminal menu in the input bar
+(not **Direct**; see the warning in step 4). The model can now run commands, and the file
 browser shows that chat's sandbox. To have the terminal selected by default, edit a model in
 **Admin Settings → Models** and set **Default terminal**.
 

@@ -28,8 +28,13 @@ docker compose up -d
 1. Open http://localhost:3000 and create the first account. It becomes the admin.
 2. Add a model provider under **Admin Settings → Connections**, or set `OPENAI_API_BASE_URL`
    and `OPENAI_API_KEY` in `.env` before the first start.
-3. In a chat, pick **Terminal** in the input bar. The model can now run commands, and the
-   file browser shows the chat's sandbox.
+3. In a chat, pick **Terminal** in the input bar's terminal menu, under **System**. The model
+   can now run commands, and the file browser shows the chat's sandbox.
+
+   The terminal is already connected; don't add it again. In particular, don't add it under
+   your personal **Settings → Integrations → Open Terminal**. That page looks like the admin
+   one, but it creates a **Direct** terminal that your browser calls itself. It cannot reach
+   the orchestrator, and it sends no chat ID.
 
 The first sandbox image (about 6 GB for the full image) is pulled in the background when the
 orchestrator starts. A chat that asks for a terminal before the pull finishes waits for it.
@@ -54,7 +59,7 @@ To make the terminal the default, edit a model in **Admin Settings → Models** 
 | `SANDBOX_IMAGE` | `ghcr.io/open-webui/open-terminal:latest` | Use `ghcr.io/felix920506/open-terminal-scientific:latest` for the full scientific Python and Excel stack |
 | `OPEN_WEBUI_PORT` | `3000` | Host port for Open WebUI |
 | `MAX_RUNNING_SANDBOXES` | `20` | Running sandboxes at once; the least recently used one is stopped beyond this |
-| `OPEN_WEBUI_IMAGE` | `ghcr.io/open-webui/open-webui:v0.12.2` | Tested with 0.11.4 and 0.12.2 |
+| `OPEN_WEBUI_IMAGE` | `ghcr.io/open-webui/open-webui:v0.12.2` | Tested with 0.11.1, 0.11.4 and 0.12.2 |
 | `OTO_IMAGE` | `ghcr.io/felix920506/open-terminal-orchestrator:0.1.1` | |
 
 The terminal connection in `TERMINAL_SERVER_CONNECTIONS` is applied only on Open WebUI's first

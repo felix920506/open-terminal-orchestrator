@@ -24,7 +24,7 @@ v0.1, a first version for testing.
   - a stopped container resumes in about 1.7 s
   - an `egress: none` sandbox has no network access
   - one sandbox cannot reach another
-- **Verified end to end against Open WebUI v0.11.4 and v0.12.2** (32/32 checks in
+- **Verified end to end against Open WebUI v0.11.1, v0.11.4 and v0.12.2** (32/32 checks in
   `scripts/e2e_openwebui.py`, using `openai/gpt-4.1-nano` through OpenRouter). The checks
   cover:
   - orchestrator detection, and policy and lifecycle editing through Open WebUI
@@ -133,13 +133,19 @@ as `ORCH_DEFAULT_IMAGE`. For airgapped hosts, `docker save` it like the images a
 
 ## Open WebUI setup
 
-1. Go to **Admin Settings → Integrations → Open Terminal** and add a connection. Set the URL to
-   `http://oto-orchestrator:8080` and the key to `ORCH_API_KEY`. Click **Verify**; it should
-   report **Orchestrator**.
-2. Set the **Policy ID** (for example `default`), then the image, CPU, memory, storage
-   (persistent) and idle timeout. The **Lifecycle** JSON takes the knobs listed below.
-3. Set **Chat context → per chat (`chat_id`)**. This is what gives each conversation its
-   own sandbox. Temporary chats are refused by Open WebUI in this mode.
+1. Go to **Admin Settings → Integrations → Open Terminal** (not **External Tool Servers**) and
+   add a connection. Set the URL to `http://oto-orchestrator:8080` and the key to
+   `ORCH_API_KEY`. **Click the verify button** at the end of the URL field; it should report
+   **Orchestrator**. Skip this and the next two steps' settings never appear. (Don't add it
+   under your personal **Settings → Integrations**: that makes a browser-side "Direct"
+   terminal that cannot reach the orchestrator.)
+2. Expand the collapsed **Orchestrator** section that appears below the URL after verifying. Set the
+   **Policy ID** (for example `default`), then the image, CPU, memory, storage (persistent)
+   and idle timeout. The **Lifecycle** JSON takes the knobs listed below.
+3. In the same section, set **Terminal Contexts → Chat** to **Per chat**. This is what gives
+   each conversation its own sandbox. The default, **Shared**, sends no chat ID, and the
+   orchestrator refuses those requests with HTTP 409 (it logs a warning saying so).
+   Temporary chats are refused by Open WebUI in this mode.
 4. Optional: paste the functions from `integrations/owui/` into **Admin → Functions**:
    - `event_chat_cleanup.py` destroys a chat's sandbox when the chat is deleted.
    - `action_reset_terminal.py` adds a "Reset terminal" button to messages.
@@ -263,7 +269,7 @@ it by hand. A run costs well under $0.01 with `gpt-4.1-nano`.
 
 ## Known limitations
 
-- **Tested against Open WebUI v0.11.4 and v0.12.2 only.** The orchestrator protocol is
+- **Tested against Open WebUI v0.11.1, v0.11.4 and v0.12.2 only.** The orchestrator protocol is
   undocumented on Open WebUI's side. Rerun `scripts/e2e_openwebui.py` when upgrading Open WebUI.
   The two versions differ only in how the browser names the chat (`X-Session-Id` header in
   0.11, a `/chats/{id}/` URL segment in 0.12), and both reach the orchestrator the same way.
