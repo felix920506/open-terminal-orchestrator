@@ -107,6 +107,20 @@ To make attaching before the first message work:
 1. **Turn on holding in the orchestrator.** Add `STAGE_UPLOADS=true` to `.env` and run
    `docker compose up -d`. Files attached on a new chat are now kept in the orchestrator's data
    volume, under the user who uploaded them, until the chat's first message is sent.
+
+   Your compose file has to pass the setting on. Files from before 0.1.5 don't. Check that
+   the orchestrator service's `environment:` has this line, and add it if not:
+
+   ```yaml
+         ORCH_STAGE_UPLOADS: ${STAGE_UPLOADS:-false}
+   ```
+
+   Then confirm it's on:
+
+   ```bash
+   docker logs oto-orchestrator 2>&1 | grep "held uploads"   # "... held uploads=on, in /data/staging)"
+   docker exec oto-orchestrator oto status | grep -A3 held_uploads   # an object, not null
+   ```
 2. **Install the "Terminal uploads" filter in Open WebUI.** Without it, held files are never
    delivered, so don't do step 1 alone.
    1. Go to **Admin Panel → Functions** and click **Create** (**+**).
@@ -125,6 +139,11 @@ How it works: when you send the first message, Open WebUI saves the chat with th
 files' paths. The filter runs before the model, reads those paths from the saved chat, and
 asks the orchestrator to put the held files into the chat's sandbox at exactly those paths. A
 held file only ever goes to a chat of the user who uploaded it.
+
+If uploads on a new chat still fail with HTTP 409, the orchestrator logs a `409 Conflict:` line
+with the request (method, path, headers with credentials redacted) and whether holding is on.
+An upload to `directory=/` means holding is off: with it on, Open WebUI is told to upload to
+`/home/user`.
 
 To check it: on a new chat, attach a file, send a message asking the model to list the home
 folder, and look for the file. `docker exec oto-orchestrator oto status` shows

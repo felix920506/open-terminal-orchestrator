@@ -53,7 +53,7 @@ Optional settings for `.env`:
 |---|---|---|
 | `SANDBOX_IMAGE` | `ghcr.io/open-webui/open-terminal:latest` | `ghcr.io/felix920506/open-terminal-scientific:latest` adds scientific Python, image processing and Excel, PDF, Word and PowerPoint handling ([contents](../../README.md#sandbox-images)) |
 | `MAX_RUNNING_SANDBOXES` | `20` | Sandboxes running at once |
-| `STAGE_UPLOADS` | `false` | Hold files attached before a chat's first message; needs a filter function, see [attaching files before the first message](../open-webui/README.md#optional-attach-files-before-the-first-message) |
+| `STAGE_UPLOADS` | `false` | Hold files attached before a chat's first message; needs a filter function, see [attaching files before the first message](../open-webui/README.md#optional-attach-files-before-the-first-message). If you copied `docker-compose.terminals.yml` before 0.1.5, copy it again: older copies don't pass this setting on. |
 | `OTO_VERSION` | `0.1.5` | Orchestrator image tag |
 
 To change `SANDBOX_IMAGE` later, see [changing the sandbox image](../open-webui/README.md#changing-the-sandbox-image).
